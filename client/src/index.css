@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #0e1a2b;
+  --color-muted: #5e6a80;
+  --color-paper: #f4f5f9;
+  --color-card: #ffffff;
+  --color-line: #e3e6ef;
+  --color-blue: #2747d8;
+  --color-blue-soft: #e8ecfd;
+  --color-sun: #ffb020;
+  --color-sun-soft: #fff4dc;
+  --color-ok: #15803d;
+  --color-bad: #c2410c;
+  --radius-card: 1.25rem;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  overflow-x: clip; /* safety net: nothing can make the whole page scroll sideways */
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.figures {
+  font-variant-numeric: tabular-nums;
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+/* 16px inputs stop iPhone zooming in. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-blue) 45%, transparent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* PDF: one slide per page at exactly 13.333in × 7.5in (1280 × 720 px). */
+@page {
+  size: 13.333in 7.5in;
+  margin: 0;
+}
+@media print {
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-slide {
+    break-after: page;
+    page-break-after: always;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

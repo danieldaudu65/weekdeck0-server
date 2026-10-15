@@ -1,0 +1,13 @@
+{
+  "name": "weekdeck",
+  "private": true,
+  "description": "WeekDeck — weekly team slides for sales managers, ready in minutes.",
+  "scripts": {
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build:client": "npm --prefix client run build",
+    "check": "npm --prefix client run typecheck && npm --prefix server run check",
+    "test": "npm --prefix client test && npm --prefix server test"
+  }
+}
