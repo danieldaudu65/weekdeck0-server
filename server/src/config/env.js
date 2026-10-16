@@ -7,7 +7,7 @@ const isProd = process.env.NODE_ENV === 'production';
 const env = {
   port: Number(process.env.PORT) || 4100,
   isProd,
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')
+  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173' || 'https://adron-weekdeck.netlify.app' || 'http://adron-weekdeck.netlify.app/')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
