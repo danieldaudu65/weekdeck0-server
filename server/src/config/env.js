@@ -22,6 +22,11 @@ const env = {
   // Optional Google Gemini (free tier): AI ideas, week summary, and "Find events near us" (Google Search).
   geminiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+  // Tried in order when the main model isn't available on the key's plan.
+  geminiFallbacks: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-2.5-flash,gemini-2.5-flash-lite')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
   // Optional real cover photos: Pixabay (free key at pixabay.com/api/docs) or Pexels.
   pixabayKey: process.env.PIXABAY_API_KEY || '',
   pexelsKey: process.env.PEXELS_API_KEY || '',

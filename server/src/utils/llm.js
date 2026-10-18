@@ -61,24 +61,55 @@ async function post(url, headers, body, ms) {
   return { status: r.status, ok: r.ok, data };
 }
 
-async function gemini(prompt, { search, maxTokens }) {
+/** Google's own reason, e.g. "Quota exceeded ... limit: 0, model: gemini-x". */
+const googleReason = (data) => String((data && data.error && (data.error.message || data.error.status)) || '').slice(0, 300);
+
+/**
+ * Free keys don't cover every model (Google may give a model a free limit of 0),
+ * so try the chosen model first, then older free-tier models.
+ */
+function geminiModels() {
+  const fallbacks = (env.geminiFallbacks || []).filter(Boolean);
+  return [...new Set([env.geminiModel, ...fallbacks])];
+}
+
+async function geminiOnce(model, prompt, { search, maxTokens }) {
   const headers = { 'x-goog-api-key': env.geminiKey };
   const ms = search ? 60_000 : 30_000;
   // Newer API first ...
-  const a = await post(`${GEMINI}/interactions`, headers, { model: env.geminiModel, input: prompt, ...(search ? { tools: [{ type: 'google_search' }] } : {}) }, ms);
-  if (a.ok) return readInteraction(a.data);
-  if (a.status === 429) throw new AiError('The free AI limit is used up for now. Try again later.');
-  // ... then the classic one.
+  const a = await post(`${GEMINI}/interactions`, headers, { model, input: prompt, ...(search ? { tools: [{ type: 'google_search' }] } : {}) }, ms);
+  if (a.ok) return { ok: true, out: readInteraction(a.data) };
+  // ... then the classic one (also used when the newer one isn't available for this key or model).
   const b = await post(
-    `${GEMINI}/models/${encodeURIComponent(env.geminiModel)}:generateContent`,
+    `${GEMINI}/models/${encodeURIComponent(model)}:generateContent`,
     headers,
     { contents: [{ role: 'user', parts: [{ text: prompt }] }], ...(search ? { tools: [{ google_search: {} }] } : {}), generationConfig: { maxOutputTokens: maxTokens } },
     ms,
   );
-  if (b.ok) return readGenerate(b.data);
-  console.warn('[weekdeck] Gemini failed', a.status, JSON.stringify(a.data).slice(0, 300), '|', b.status, JSON.stringify(b.data).slice(0, 300));
-  if (b.status === 429) throw new AiError('The free AI limit is used up for now. Try again later.');
-  throw new AiError('The AI didn’t answer just now. Try again in a minute.');
+  if (b.ok) return { ok: true, out: readGenerate(b.data) };
+  console.warn(`[weekdeck] Gemini ${model} failed:`, a.status, googleReason(a.data), '|', b.status, googleReason(b.data));
+  return { ok: false, status: b.status === 404 ? a.status : b.status, reason: googleReason(b.data) || googleReason(a.data) };
+}
+
+async function gemini(prompt, opts) {
+  let last = null;
+  for (const model of geminiModels()) {
+    const r = await geminiOnce(model, prompt, opts);
+    if (r.ok) return r.out;
+    last = { ...r, model };
+    // A bad key or a blocked request won't get better with another model.
+    if (r.status === 400 && /api key/i.test(r.reason)) throw new AiError('The Gemini key on the server isn’t valid. Check GEMINI_API_KEY.');
+    if (r.status === 401 || r.status === 403) throw new AiError(`Google refused the request: ${r.reason || 'permission denied'}. Check the Gemini key and that the Gemini API is enabled for it.`);
+  }
+  if (last && last.status === 429) {
+    const zero = /limit:\s*0\b/i.test(last.reason);
+    throw new AiError(
+      zero
+        ? 'Google’s free plan gives this key no allowance for these models. Open aistudio.google.com, check the key’s plan and quotas, or set GEMINI_MODEL to a model your key can use.'
+        : 'Google’s free limit for this key is used up for now (per minute or per day). Try again later.',
+    );
+  }
+  throw new AiError(last && last.reason ? `The AI didn’t answer: ${last.reason}` : 'The AI didn’t answer just now. Try again in a minute.');
 }
 
 async function anthropic(prompt, { maxTokens }) {
