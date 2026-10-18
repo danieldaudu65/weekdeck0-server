@@ -7,9 +7,10 @@ const isProd = process.env.NODE_ENV === 'production';
 const env = {
   port: Number(process.env.PORT) || 4100,
   isProd,
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173' || 'https://adron-weekdeck.netlify.app' || 'http://adron-weekdeck.netlify.app/')
+  // Website addresses allowed to call the API, comma-separated. A trailing "/" is ignored.
+  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,https://adron-weekdeck.netlify.app')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/\/+$/, ''))
     .filter(Boolean),
   mongoUri: process.env.MONGODB_URI || '',
   jwtSecret: process.env.JWT_SECRET || '',
@@ -18,6 +19,9 @@ const env = {
   // Optional AI ideas for activities (Anthropic Claude). Leave empty to switch off.
   anthropicKey: process.env.ANTHROPIC_API_KEY || '',
   aiModel: process.env.AI_MODEL || 'claude-haiku-5-5',
+  // Optional Google Gemini (free tier): AI ideas, week summary, and "Find events near us" (Google Search).
+  geminiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   // Optional real cover photos: Pixabay (free key at pixabay.com/api/docs) or Pexels.
   pixabayKey: process.env.PIXABAY_API_KEY || '',
   pexelsKey: process.env.PEXELS_API_KEY || '',

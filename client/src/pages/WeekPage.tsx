@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Brain, Check, ChevronLeft, ChevronRight, CloudOff, Crown, Loader2, Minus, Plus, Sparkles, Trophy, UserPlus, Wallet, Wand2 } from 'lucide-react';
+import { ArrowRight, Brain, CalendarSearch, Check, ChevronLeft, ChevronRight, CloudOff, Crown, Loader2, Minus, Plus, Sparkles, Trophy, UserPlus, Wallet, Wand2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useWeek } from '../lib/useWeek';
 import { useActivityMemory } from '../lib/useActivityMemory';
@@ -13,7 +13,11 @@ import { DAYS, DAY_LONG, DAY_SHORT, type DayKey, type WeekRow } from '../lib/typ
 import { addWeeks, mondayOf, monthLabel, monthOf, weekNumberInMonth, weekRangeLabel } from '../lib/weeks';
 import { formatAmount, formatNaira, sumOrNull } from '../lib/money';
 import { AmountInput } from '../components/AmountInput';
-import { Button, Card, SectionTitle, Spinner } from '../components/ui';
+import { Area, Button, Card, SectionTitle, Spinner } from '../components/ui';
+import { EventsPanel } from '../components/EventsPanel';
+import { WeekMap } from '../components/WeekMap';
+import { useWeekStops } from '../lib/stops';
+import type { FoundPlace } from '../lib/places';
 
 const rowTotal = (r: WeekRow) => sumOrNull(DAYS.map((d) => r[d]));
 
@@ -38,7 +42,37 @@ export function WeekPage() {
     };
   }, [week, members]);
 
-  const { memory, aiOn } = useActivityMemory(weekStart);
+  const { memory, aiOn, eventsOn } = useActivityMemory(weekStart);
+  const { stops, center, loading: stopsLoading } = useWeekStops(week, team!.region);
+  const [showEvents, setShowEvents] = useState(false);
+  const [writing, setWriting] = useState(false);
+
+  /** A day's text changed: keep only the map pins whose place is still written there. */
+  const setDayText = (d: DayKey, v: string) =>
+    update((w) => ({
+      ...w,
+      activities: { ...w.activities, [d]: v },
+      places: (w.places ?? []).filter((p) => p.day !== d || v.toLowerCase().includes(p.name.toLowerCase())),
+    }));
+  const addPin = (d: DayKey, p: FoundPlace) =>
+    update((w) => ({
+      ...w,
+      places: [...(w.places ?? []).filter((x) => !(x.day === d && x.name.toLowerCase() === p.name.toLowerCase())), { day: d, name: p.name, lat: p.lat, lon: p.lon }].slice(-60),
+    }));
+
+  const writeSummary = async () => {
+    setWriting(true);
+    try {
+      await retry(); // the AI reads the saved figures, so save first
+      const r = await post<{ summary: string }>('/api/ai/summary', { weekStart });
+      update((w) => ({ ...w, note: r.summary.slice(0, 600) }));
+      toast('Summary written. Edit it if you like.');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'No summary just now. Try again.', 'bad');
+    } finally {
+      setWriting(false);
+    }
+  };
   const usualPlan = useMemo(() => {
     if (!week) return null;
     const plan = planFromUsual(memory, week.activities, weekStart);
@@ -178,6 +212,11 @@ export function WeekPage() {
                       <Wand2 className="size-3.5 text-blue" aria-hidden /> Fill usual
                     </button>
                   )}
+                  {eventsOn && (
+                    <button type="button" onClick={() => setShowEvents((v) => !v)} aria-pressed={showEvents} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-blue px-3 text-xs font-extrabold text-white shadow-sm active:scale-95">
+                      <CalendarSearch className="size-3.5" aria-hidden /> Events near us
+                    </button>
+                  )}
                   {aiOn && (
                     <button type="button" onClick={askAi} disabled={ai.state === 'loading'} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3 text-xs font-extrabold text-white shadow-sm active:scale-95 disabled:opacity-60">
                       {ai.state === 'loading' ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5 text-sun" aria-hidden />} AI ideas
@@ -236,6 +275,18 @@ export function WeekPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            {showEvents && (
+              <EventsPanel
+                weekStart={weekStart}
+                region={team!.region}
+                added={(d, line) => week.activities[d].includes(line)}
+                onAdd={(d, line) => {
+                  addLine(d, line);
+                  toast(`Added to ${DAY_LONG[d]}`);
+                }}
+                onClose={() => setShowEvents(false)}
+              />
+            )}
             <Card className="grid min-w-0 gap-5 p-4 sm:p-5 md:grid-cols-2">
               {DAYS.map((d) => (
                 <ActivityInput
@@ -245,9 +296,42 @@ export function WeekPage() {
                   value={week.activities[d]}
                   memory={memory}
                   weekStart={weekStart}
-                  onChange={(v) => update((w) => ({ ...w, activities: { ...w.activities, [d]: v } }))}
+                  near={center}
+                  onPlace={(p) => addPin(d, p)}
+                  onChange={(v) => setDayText(d, v)}
                 />
               ))}
+            </Card>
+          </section>
+
+          {/* Map */}
+          <section>
+            <SectionTitle action={<span className="text-xs font-semibold text-muted">{stops.length ? `${stops.length} place${stops.length === 1 ? '' : 's'}` : ''}</span>}>This week on the map</SectionTitle>
+            <WeekMap stops={stops} center={center} loading={stopsLoading} />
+          </section>
+
+          {/* Week summary */}
+          <section>
+            <SectionTitle
+              action={
+                aiOn ? (
+                  <button type="button" onClick={writeSummary} disabled={writing} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3 text-xs font-extrabold text-white shadow-sm active:scale-95 disabled:opacity-60">
+                    {writing ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5 text-sun" aria-hidden />} {week.note ? 'Rewrite with AI' : 'Write with AI'}
+                  </button>
+                ) : undefined
+              }
+            >
+              Week summary
+            </SectionTitle>
+            <Card className="p-4 sm:p-5">
+              <Area
+                label="Shown on the “Week at a glance” slide"
+                value={week.note}
+                maxLength={400}
+                onChange={(e) => update((w) => ({ ...w, note: e.target.value }))}
+                placeholder="e.g. A strong week: ₦2.1m in sales, led by Daniel. Next week we focus on site inspections in Ibeju-Lekki."
+              />
+              <p className="mt-2 text-xs text-muted">{aiOn ? 'Tap “Write with AI” after entering the figures, then edit as you like.' : 'Two or three lines on how the week went and what’s next.'}</p>
             </Card>
           </section>
 

@@ -34,6 +34,28 @@ Browser (React)  ──/api──►  Node + Express  ──►  MongoDB
 - **AI ideas (optional).** With `ANTHROPIC_API_KEY` set on the server, an
   *AI ideas* button suggests fresh activities per day plus a tip, based on the
   team's last 8 weeks and region. Tap an idea to add it.
+- **Real places while typing.** Type “Market storm at Ike…” and real places
+  (OpenStreetMap, free, no key) appear, nearest to the team’s region first.
+  Picking one pins it exactly on the map.
+- **This week on the map.** Every place in the activities, coloured by day,
+  with the route, an estimated distance and drive time, a “Find shortest
+  order” button, and **Open in Google Maps** for each day (opens the phone’s
+  Maps app with live traffic, free).
+- **Events near us** (needs the free `GEMINI_API_KEY`). Gemini searches Google
+  for real events in the team’s area that week (trade fairs, church
+  programmes, market days, expos…). Each result shows its source link; tap a
+  day to add it to the activities.
+- **Week summary.** A note on the “Week at a glance” slide. **Write with AI**
+  drafts it from the figures (Gemini or Claude); the manager can edit it.
+- **Present mode.** Full-screen slideshow from the Slides page: numbers count
+  up, bars grow, arrow keys / tap / swipe to move, F for full screen.
+- **Map slide.** “Where we’re going”: the week’s stops on a real map, in the
+  PowerPoint and PDF too.
+- **Region head view** at `/region`. The region head creates a region (name +
+  PIN) and shares its 6-character code; managers enter it on **Team → Join your
+  region**. The dashboard shows each team’s week, change from last week, the
+  month, who hasn’t entered figures, a team leaderboard, top marketers, and a
+  **Present** button for any team’s slides (read-only).
 - **Slides page.** 96 looks: 8 styles × 12 colour palettes, with a live
   mini-preview of each style and a "Surprise me" button. Optional
   "Week at a glance" slide, and a preview of every slide.
@@ -83,6 +105,7 @@ In `server/.env` set:
 | `ADMIN_SECRET` | Optional, 16+ characters; lets you reset a forgotten PIN |
 | `DNS_SERVERS` | Optional. `8.8.8.8,1.1.1.1` if Atlas fails with `querySrv ECONNREFUSED` |
 | `PIXABAY_API_KEY` | Optional, free. Turns on real cover photos (Team → Cover photo → Find a photo). Sign up at pixabay.com, key at pixabay.com/api/docs. (`PEXELS_API_KEY` also works if you have one.) |
+| `GEMINI_API_KEY` | Optional, free. Events near us, Write with AI, AI ideas. Get it at aistudio.google.com/apikey. `GEMINI_MODEL` picks the model |
 | `ANTHROPIC_API_KEY` | Optional. Turns on *AI ideas* (from platform.claude.com). `AI_MODEL` picks the model |
 
 Make a random secret with:
@@ -106,7 +129,8 @@ Checks: `npm run check` (types + backend), `npm test` (unit tests).
   values in the host's settings with `NODE_ENV=production`, and set
   `CORS_ORIGINS` to the website's address.
 - **Website** (Netlify, Vercel, Firebase Hosting, Cloudflare Pages): root folder
-  `client/`, build `npm run build`, output `dist`. Set
+  `client/`, build `npm run build`, output `dist`. (`client/public/_redirects`
+  already sends every path to the app on Netlify.) Set
   `VITE_API_BASE_URL=https://<your-backend>` **before** building. Add a
   "rewrite everything to `/index.html`" rule so `/slides` and `/team` work on
   refresh.

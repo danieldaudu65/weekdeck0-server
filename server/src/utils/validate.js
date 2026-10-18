@@ -136,7 +136,27 @@ function cleanWeek(raw, memberIds) {
   }
   const activities = {};
   for (const d of DAYS) activities[d] = multiline(r.activities && r.activities[d], 600);
-  return { rows, activities, note: multiline(r.note, 600) };
+  return { rows, activities, note: multiline(r.note, 600), places: cleanPlaces(r.places) };
+}
+
+/** Map pins for the week: [{day, name, lat, lon}], at most 60, inside sensible coordinates. */
+function cleanPlaces(raw) {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) throw new ValidationError('Places must be a list.');
+  const out = [];
+  const seen = new Set();
+  for (const p of raw.slice(0, 60)) {
+    if (!p || !DAYS.includes(p.day)) continue;
+    const name = str(p.name, 80);
+    const lat = Number(p.lat);
+    const lon = Number(p.lon);
+    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+    const key = `${p.day}|${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ day: p.day, name, lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 });
+  }
+  return out;
 }
 
 module.exports = {
@@ -149,6 +169,7 @@ module.exports = {
   cleanMembers,
   cleanCoverImage,
   cleanWeek,
+  cleanPlaces,
   amount,
   count,
 };

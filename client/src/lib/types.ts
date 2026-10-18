@@ -27,6 +27,8 @@ export interface TeamProfile {
 export interface Team extends TeamProfile {
   id: string;
   name: string;
+  /** The region this team joined with the region head's code, if any. */
+  joinedRegion?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,8 +50,18 @@ export interface Week {
   weekStart: string; // Monday, YYYY-MM-DD
   rows: WeekRow[];
   activities: Activities;
+  /** The week summary shown on the "Week at a glance" slide. */
   note: string;
+  /** Places picked from the map search (exact pins for the map). */
+  places?: WeekPlace[];
   updatedAt?: string;
+}
+
+export interface WeekPlace {
+  day: DayKey;
+  name: string;
+  lat: number;
+  lon: number;
 }
 
 export const emptyActivities = (): Activities => ({ mon: '', tue: '', wed: '', thu: '', fri: '' });

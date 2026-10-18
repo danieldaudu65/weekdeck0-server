@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, put, ApiError } from './api';
-import { DAYS, emptyActivities, type Activities, type Member, type Week, type WeekRow } from './types';
+import { DAYS, emptyActivities, type Activities, type Member, type Week, type WeekPlace, type WeekRow } from './types';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -34,7 +34,7 @@ export function useWeek(weekStart: string, members: Member[]) {
     pending.current = null;
     setSaveState('saving');
     try {
-      await put(`/api/weeks/${w.weekStart}`, { rows: w.rows, activities: w.activities, note: w.note });
+      await put(`/api/weeks/${w.weekStart}`, { rows: w.rows, activities: w.activities, note: w.note, places: w.places ?? [] });
       setSaveState(pending.current ? 'saving' : 'saved');
     } catch (err) {
       pending.current = pending.current ?? w; // keep it for "Try again"
@@ -54,15 +54,17 @@ export function useWeek(weekStart: string, members: Member[]) {
         const r = await api<{ week: Week | null }>(`/api/weeks/${weekStart}`);
         let w: Week;
         if (r.week) {
-          w = { ...r.week, rows: rowsFor(members, r.week.rows) };
+          w = { ...r.week, places: r.week.places ?? [], rows: rowsFor(members, r.week.rows) };
         } else {
           let activities: Activities = emptyActivities();
+          let places: WeekPlace[] = [];
           const prev = await api<{ week: Week | null }>(`/api/weeks/latest?before=${weekStart}`).catch(() => ({ week: null }));
           if (prev.week && DAYS.some((d) => prev.week!.activities[d])) {
             activities = { ...prev.week.activities };
+            places = prev.week.places ?? []; // the copied plans keep their map pins
             if (alive) setCopiedFrom(prev.week.weekStart);
           }
-          w = { weekStart, rows: rowsFor(members, []), activities, note: '' };
+          w = { weekStart, rows: rowsFor(members, []), activities, note: '', places };
         }
         if (alive) setWeek(w);
       } catch (err) {

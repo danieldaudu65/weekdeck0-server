@@ -9,8 +9,39 @@ const FONTS: Record<Font, string> = {
 };
 const stroke = (s: { stroke?: string; strokeW?: number }): CSSProperties => (s.stroke ? { border: `${s.strokeW ?? 2}px solid #${s.stroke}`, boxSizing: 'border-box' } : {});
 
-function ShapeView({ s }: { s: Shape }) {
-  const box: CSSProperties = { position: 'absolute', left: s.x, top: s.y };
+/** Present mode: a number like "₦2,175,000" counts up from zero. */
+function CountUp({ text, delay }: { text: string; delay: number }) {
+  const m = /^(\D*?)(\d[\d,]*(?:\.\d+)?)(\D*)$/.exec(text);
+  const [shown, setShown] = useState(m ? `${m[1]}0${m[3]}` : text);
+  useEffect(() => {
+    if (!m) return;
+    const target = Number(m[2].replace(/,/g, ''));
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !Number.isFinite(target)) return setShown(text);
+    let raf = 0;
+    const start = performance.now() + delay;
+    const tick = (now: number) => {
+      const p = Math.min(1, Math.max(0, (now - start) / 1200));
+      const eased = 1 - (1 - p) ** 3;
+      setShown(`${m[1]}${Math.round(target * eased).toLocaleString('en-US')}${m[3]}`);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, delay]);
+  return <>{shown}</>;
+}
+
+/** Present mode entrances: shapes fade up one after another; bars grow; numbers count. */
+function entrance(s: Shape, i: number): CSSProperties {
+  const delay = Math.min(1400, i * 32);
+  if (s.type === 'rect' && s.anim === 'grow') return { animation: `wd-grow 900ms cubic-bezier(.2,.8,.2,1) ${delay + 250}ms both`, transformOrigin: 'left center' };
+  return { animation: `wd-in 520ms cubic-bezier(.2,.8,.2,1) ${delay}ms both` };
+}
+
+function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: boolean; index?: number }) {
+  const box: CSSProperties = { position: 'absolute', left: s.x, top: s.y, ...(animate ? entrance(s, index) : {}) };
   switch (s.type) {
     case 'rect':
       return <div style={{ ...box, width: s.w, height: s.h, background: hex(s.fill), borderRadius: s.radius ?? 0, ...stroke(s) }} />;
@@ -41,7 +72,7 @@ function ShapeView({ s }: { s: Shape }) {
             overflowWrap: 'anywhere',
           }}
         >
-          {s.text}
+          {animate && s.anim === 'count' ? <CountUp text={s.text} delay={Math.min(1400, index * 32) + 200} /> : s.text}
         </div>
       );
     case 'table': {
@@ -96,7 +127,7 @@ function ShapeView({ s }: { s: Shape }) {
 }
 
 /** One slide drawn at 1280×720 and scaled to fit its container (or full size for printing). */
-export function SlideCanvas({ bg, shapes, fixed = false, label }: { bg: string; shapes: Shape[]; fixed?: boolean; label?: string }) {
+export function SlideCanvas({ bg, shapes, fixed = false, label, animate = false }: { bg: string; shapes: Shape[]; fixed?: boolean; label?: string; animate?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(fixed ? 1 : 0.25);
   useEffect(() => {
@@ -127,7 +158,7 @@ export function SlideCanvas({ bg, shapes, fixed = false, label }: { bg: string; 
       }}
     >
       {shapes.map((s, i) => (
-        <ShapeView key={i} s={s} />
+        <ShapeView key={i} s={s} animate={animate} index={i} />
       ))}
     </div>
   );

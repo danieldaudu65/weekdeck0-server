@@ -12,6 +12,8 @@ const weekRoutes = require('./routes/weeks');
 const adminRoutes = require('./routes/admin');
 const aiRoutes = require('./routes/ai');
 const photoRoutes = require('./routes/photos');
+const placeRoutes = require('./routes/places');
+const regionRoutes = require('./routes/region');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -37,7 +39,7 @@ function createApp() {
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: 'draft-7', legacyHeaders: false }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'weekdeck-api', database: mongoose.connection.readyState === 1 ? 'connected' : 'not-connected', ai: Boolean(env.anthropicKey), photos: Boolean(env.pixabayKey || env.pexelsKey) });
+    res.json({ ok: true, service: 'weekdeck-api', database: mongoose.connection.readyState === 1 ? 'connected' : 'not-connected', ai: Boolean(env.geminiKey || env.anthropicKey), events: Boolean(env.geminiKey), photos: Boolean(env.pixabayKey || env.pexelsKey) });
   });
   app.use('/api/auth', authRoutes);
   app.use('/api/team', teamRoutes);
@@ -45,6 +47,8 @@ function createApp() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/photos', photoRoutes);
+  app.use('/api/places', placeRoutes);
+  app.use('/api/region', regionRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

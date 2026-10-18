@@ -28,7 +28,17 @@ const weekSchema = new mongoose.Schema(
       thu: { type: String, default: '' },
       fri: { type: String, default: '' },
     },
-    note: { type: String, default: '' },
+    note: { type: String, default: '' }, // the week summary shown on the "Week at a glance" slide
+    // Places picked from the map search, so the map knows exactly where they are.
+    places: {
+      type: [
+        new mongoose.Schema(
+          { day: { type: String, required: true }, name: { type: String, required: true }, lat: Number, lon: Number },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
@@ -48,6 +58,7 @@ weekSchema.methods.toPublic = function toPublic() {
       fri: this.activities.fri,
     },
     note: this.note,
+    places: (this.places || []).map((p) => ({ day: p.day, name: p.name, lat: p.lat, lon: p.lon })),
     updatedAt: this.updatedAt,
   };
 };

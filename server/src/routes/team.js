@@ -4,7 +4,9 @@ const { Router } = require('express');
 const Team = require('../models/Team');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireTeam } = require('../middleware/auth');
-const { cleanTeamProfile, cleanTeamName } = require('../utils/validate');
+const Region = require('../models/Region');
+const { cleanTeamProfile, cleanTeamName, ValidationError } = require('../utils/validate');
+const { cleanJoinCode } = require('../utils/pinLogin');
 
 const router = Router();
 router.use(requireTeam);
@@ -29,6 +31,31 @@ router.put(
       req.team.name = name.display;
     }
     Object.assign(req.team, profile);
+    await req.team.save();
+    res.json({ team: req.team.toPublic() });
+  }),
+);
+
+/** Join a region with the code the region head shares. */
+router.post(
+  '/join',
+  asyncHandler(async (req, res) => {
+    const code = cleanJoinCode(req.body && req.body.code);
+    if (code.length !== 6) throw new ValidationError('The region code has 6 letters and numbers.');
+    const region = await Region.findOne({ joinCode: code });
+    if (!region) return res.status(404).json({ error: { code: 'bad_code', message: 'No region has that code. Check it with your region head.' } });
+    req.team.regionRef = region._id;
+    req.team.regionName = region.name;
+    await req.team.save();
+    res.json({ team: req.team.toPublic() });
+  }),
+);
+
+router.post(
+  '/leave',
+  asyncHandler(async (req, res) => {
+    req.team.regionRef = null;
+    req.team.regionName = '';
     await req.team.save();
     res.json({ team: req.team.toPublic() });
   }),

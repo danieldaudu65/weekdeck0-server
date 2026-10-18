@@ -8,6 +8,7 @@ const EMPTY: Memory = { phrases: [], types: [], places: [], weeks: 0 };
 export function useActivityMemory(weekStart: string) {
   const [memory, setMemory] = useState<Memory>(EMPTY);
   const [aiOn, setAiOn] = useState(false);
+  const [eventsOn, setEventsOn] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -20,10 +21,13 @@ export function useActivityMemory(weekStart: string) {
   }, [weekStart]);
 
   useEffect(() => {
-    api<{ ai?: boolean }>('/api/health')
-      .then((r) => setAiOn(Boolean(r.ai)))
+    api<{ ai?: boolean; events?: boolean }>('/api/health')
+      .then((r) => {
+        setAiOn(Boolean(r.ai));
+        setEventsOn(Boolean(r.events));
+      })
       .catch(() => undefined);
   }, []);
 
-  return { memory, aiOn };
+  return { memory, aiOn, eventsOn };
 }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Camera, FileUp, KeyRound, LogOut, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Building2, Camera, FileUp, KeyRound, LogOut, Save, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { post, setToken, ApiError } from '../lib/api';
 import { shrinkImage } from '../lib/importPptx';
-import { emptyActivities, type TeamProfile } from '../lib/types';
+import { emptyActivities, type Team, type TeamProfile } from '../lib/types';
 import { buildDeck } from '../lib/deck';
 import { layoutSlide } from '../lib/looks';
 import { lookById } from '../lib/templates';
@@ -141,6 +141,8 @@ export function TeamPage() {
         </Card>
       </section>
 
+      <JoinRegion />
+
       <section className="grid gap-3 md:grid-cols-3">
         <Link to="/setup" className="flex items-center gap-3 rounded-card border border-line bg-white p-4 font-bold hover:border-blue">
           <span className="grid size-10 place-items-center rounded-xl bg-blue-soft text-blue">
@@ -173,6 +175,72 @@ export function TeamPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Join the region head's dashboard with their 6-character code. */
+function JoinRegion() {
+  const { team, setTeam } = useAuth();
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const joined = team!.joinedRegion;
+
+  const join = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await post<{ team: Team }>('/api/team/join', { code });
+      setTeam(r.team);
+      setCode('');
+      toast(`Joined ${r.team.joinedRegion?.name ?? 'the region'}`);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Couldn’t join. Check the code.', 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const leave = async () => {
+    if (!window.confirm(`Leave ${joined?.name}? The region head will no longer see your team.`)) return;
+    try {
+      const r = await post<{ team: Team }>('/api/team/leave', {});
+      setTeam(r.team);
+    } catch {
+      toast('Couldn’t leave. Try again.', 'bad');
+    }
+  };
+
+  return (
+    <section>
+      <SectionTitle>Region</SectionTitle>
+      <Card className="p-5">
+        {joined ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="flex items-center gap-2 font-bold">
+              <Building2 className="size-5 text-blue" aria-hidden /> Part of <span className="text-blue">{joined.name}</span>
+            </p>
+            <Button variant="danger" size="sm" onClick={leave}>
+              Leave region
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={join} className="flex flex-wrap items-end gap-3">
+            <Field
+              className="min-w-0 flex-1"
+              label="Join your region"
+              hint="Your region head shares a 6-character code. They’ll see your totals and slides."
+              value={code}
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              placeholder="e.g. K7Q2MP"
+            />
+            <Button type="submit" loading={busy} disabled={code.length !== 6}>
+              Join
+            </Button>
+          </form>
+        )}
+      </Card>
+    </section>
   );
 }
 

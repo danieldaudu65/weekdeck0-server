@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "main": "src/index.js",
-  "engines": { "node": ">=20" },
+  "engines": { "node": "22.x" },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",

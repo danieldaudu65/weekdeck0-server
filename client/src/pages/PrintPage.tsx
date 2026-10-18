@@ -12,12 +12,12 @@ export function PrintPage() {
   const { team } = useAuth();
   const [params] = useSearchParams();
   const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(params.get('week') ?? '') ? params.get('week')! : mondayOf();
-  const deck = useDeck(team!, weekStart, params.get('summary') !== '0');
+  const deck = useDeck({ team, weekStart, includeSummary: params.get('summary') !== '0', includeMap: params.get('map') !== '0' });
   const printed = useRef(false);
 
   useEffect(() => {
     document.title = deck.fileName;
-    if (deck.loading || deck.error || printed.current || !deck.laid.length) return;
+    if (deck.loading || deck.mapPending || deck.error || printed.current || !deck.laid.length) return;
     printed.current = true;
     // Wait for fonts and pictures so the PDF isn't missing anything.
     const imgs = Array.from(document.images)
@@ -30,7 +30,7 @@ export function PrintPage() {
           }),
       );
     Promise.all([document.fonts?.ready, ...imgs]).then(() => setTimeout(() => window.print(), 300));
-  }, [deck.loading, deck.error, deck.laid.length, deck.fileName]);
+  }, [deck.loading, deck.mapPending, deck.error, deck.laid.length, deck.fileName]);
 
   return (
     <div className="min-h-dvh bg-[#d9dce4]">

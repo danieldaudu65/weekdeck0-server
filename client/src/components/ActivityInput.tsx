@@ -1,33 +1,96 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { History, Lightbulb, MapPin, Repeat } from 'lucide-react';
+import { History, Lightbulb, MapPin, Navigation, Repeat } from 'lucide-react';
 import { useAutosize } from '../lib/useAutosize';
 import { suggest, type Memory, type Suggestion } from '../lib/suggest';
+import { searchPlaces, type FoundPlace, type LatLon } from '../lib/places';
 import type { DayKey } from '../lib/types';
 
-const ICON: Record<Suggestion['kind'], typeof History> = { usual: Repeat, memory: History, place: MapPin, idea: Lightbulb };
-const TONE: Record<Suggestion['kind'], string> = {
+type Chip = Omit<Suggestion, 'kind'> & { kind: Suggestion['kind'] | 'map'; found?: FoundPlace };
+
+const ICON: Record<Chip['kind'], typeof History> = { usual: Repeat, memory: History, place: MapPin, idea: Lightbulb, map: Navigation };
+const TONE: Record<Chip['kind'], string> = {
   usual: 'bg-sun-soft text-[#7a4f00] border-sun/40',
   memory: 'bg-white text-ink border-line',
   place: 'bg-blue-soft text-blue border-blue/20',
   idea: 'bg-white text-muted border-dashed border-line',
+  map: 'bg-[#ecfdf3] text-[#05603a] border-[#a6f4c5]',
 };
+
+/** "Market storm at Ikeja Ci" → the place being typed ("Ikeja Ci") and where it starts. */
+function placeBeingTyped(text: string): { partial: string; start: number } | null {
+  const m = /\b(?:at|in|around|to|@)\s+([^,;\n]{2,60})$/i.exec(text);
+  if (!m || m.index === undefined) return null;
+  return { partial: m[1].trim(), start: text.length - m[1].length };
+}
 
 /**
  * A day's activities box that suggests as you type: what the team usually
  * does that day, matching past activities, places after "at", and ideas.
  * Tap a chip (or press Tab for the first one).
  */
-export function ActivityInput({ day, label, value, onChange, memory, weekStart }: { day: DayKey; label: string; value: string; onChange: (v: string) => void; memory: Memory; weekStart: string }) {
+export function ActivityInput({
+  day,
+  label,
+  value,
+  onChange,
+  memory,
+  weekStart,
+  near,
+  onPlace,
+}: {
+  day: DayKey;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  memory: Memory;
+  weekStart: string;
+  /** Centre of the team's region: real places closest to it come first. */
+  near?: LatLon;
+  /** Called when a real place is picked (exact pin for the map). */
+  onPlace?: (p: FoundPlace) => void;
+}) {
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
   const blurTimer = useRef<number | undefined>(undefined);
-  const list = useMemo(() => (focused ? suggest(memory, { day, text: value, weekStart }) : []), [focused, memory, day, value, weekStart]);
+  const own = useMemo(() => (focused ? suggest(memory, { day, text: value, weekStart }) : []), [focused, memory, day, value, weekStart]);
+
+  // Real places from the map while typing "at …" (after a short pause).
+  const typing = focused ? placeBeingTyped(value) : null;
+  const [live, setLive] = useState<{ q: string; places: FoundPlace[] }>({ q: '', places: [] });
+  useEffect(() => {
+    if (!typing || !near || typing.partial.length < 2) return;
+    const q = typing.partial;
+    const ctrl = new AbortController();
+    const t = window.setTimeout(() => {
+      searchPlaces(q, near, ctrl.signal)
+        .then((places) => setLive({ q, places }))
+        .catch(() => undefined);
+    }, 280);
+    return () => {
+      window.clearTimeout(t);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typing?.partial, near?.lat, near?.lon]);
+
+  const list: Chip[] = useMemo(() => {
+    const chips: Chip[] = [...own];
+    if (typing && live.q === typing.partial) {
+      const have = new Set(chips.map((c) => c.label.toLowerCase()));
+      for (const p of live.places) {
+        if (have.has(p.name.toLowerCase())) continue;
+        chips.push({ id: `map:${p.lat},${p.lon}`, label: p.area ? `${p.name} · ${p.area}` : p.name, note: p.kind || 'Map', kind: 'map', apply: value.slice(0, typing.start) + p.name, found: p });
+      }
+    }
+    return chips.slice(0, 9);
+  }, [own, live, typing, value]);
 
   useAutosize(ref, value);
 
-  const pick = (s: Suggestion) => {
+  const pick = (s: Chip) => {
+    if (s.found) onPlace?.(s.found);
     onChange(s.apply.slice(0, 600));
     requestAnimationFrame(() => {
       const el = ref.current;

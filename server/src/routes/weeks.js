@@ -72,7 +72,7 @@ router.put(
     );
     const week = await Week.findOneAndUpdate(
       { team: req.team._id, weekStart },
-      { $set: { rows: data.rows, activities: data.activities, note: data.note } },
+      { $set: { rows: data.rows, activities: data.activities, note: data.note, places: data.places } },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     res.json({ week: week.toPublic() });

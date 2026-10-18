@@ -35,6 +35,8 @@ const teamSchema = new mongoose.Schema(
     templateId: { type: String, default: 'classic' },
     members: { type: [memberSchema], default: [] },
     coverImage: { type: String, default: '' }, // small data URL, e.g. the photo from their old cover slide
+    regionRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Region', default: null, index: true },
+    regionName: { type: String, default: '' }, // the region this team joined (for display)
   },
   { timestamps: true },
 );
@@ -54,6 +56,7 @@ teamSchema.methods.toPublic = function toPublic() {
     templateId: this.templateId,
     members: this.members.map((m) => ({ id: m.id, name: m.name, lead: m.lead })),
     coverImage: this.coverImage || '',
+    joinedRegion: this.regionRef ? { id: String(this.regionRef), name: this.regionName } : null,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

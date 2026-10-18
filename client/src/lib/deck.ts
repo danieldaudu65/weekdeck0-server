@@ -22,10 +22,11 @@ export interface DeckTable {
 
 export type DeckSlide =
   | { kind: 'cover'; title: string; week: string; weekNo: number; range: string; team: string; name: string; role: string; image: string }
-  | { kind: 'summary'; title: string; stats: { label: string; value: string; sub: string }[]; bars: { name: string; value: number; label: string }[] }
+  | { kind: 'summary'; title: string; stats: { label: string; value: string; sub: string }[]; bars: { name: string; value: number; label: string }[]; note: string }
   | { kind: 'team'; title: string; members: { name: string; lead: boolean }[] }
   | { kind: 'table'; title: string; subtitle: string; table: DeckTable }
   | { kind: 'activities'; title: string; subtitle: string; items: { day: string; text: string }[] }
+  | { kind: 'map'; title: string; subtitle: string; image: string; days: { day: string; color: string; stops: string[] }[] }
   | { kind: 'thanks'; title: string; sub: string };
 
 export interface DeckInput {
@@ -35,6 +36,8 @@ export interface DeckInput {
   monthWeeks: Week[];
   previousWeek?: Week | null;
   includeSummary: boolean;
+  /** A ready map picture of the week's stops (see staticMap.ts), for the map slide. */
+  map?: { image: string; days: { day: string; color: string; stops: string[] }[] } | null;
 }
 
 const rowTotal = (r: WeekRow | undefined) => (r ? sumOrNull(DAYS.map((d) => r[d])) : null);
@@ -47,7 +50,7 @@ function tableNames(team: Team): Map<string, string> {
   return new Map(team.members.map((m) => [m.id, (counts.get(first(m.name))! > 1 ? m.name : first(m.name)).toUpperCase()]));
 }
 
-export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary }: DeckInput): DeckSlide[] {
+export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary, map }: DeckInput): DeckSlide[] {
   const names = tableNames(team);
   const byId = (w: Week | undefined | null) => new Map((w?.rows ?? []).map((r) => [r.memberId, r]));
   const thisWeek = byId(week);
@@ -102,6 +105,7 @@ export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary
         { label: 'Top performer', value: top && top.value > 0 ? top.name.split(' ')[0] : '—', sub: top && top.value > 0 ? formatNaira(top.value) : 'No figures yet' },
       ],
       bars: [...perMember].sort((a, b) => b.value - a.value).slice(0, 5).map((p) => ({ name: p.name, value: p.value, label: formatNaira(p.value) })),
+      note: (week.note || '').trim(),
     });
   }
 
@@ -138,17 +142,23 @@ export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary
     subtitle: weekLabel,
     items: DAYS.map((d) => ({ day: DAY_LONG[d], text: week.activities[d] || '' })),
   });
+  if (map && map.image) {
+    slides.push({ kind: 'map', title: 'Where We’re Going', subtitle: weekLabel, image: map.image, days: map.days });
+  }
   slides.push({ kind: 'thanks', title: 'Thank you!', sub: [team.managerName, team.teamTitle || team.name].filter(Boolean).join(' · ') });
   return slides;
 }
 
 /* ------------------------------------------------------------------ shapes */
 
+/** Present mode only: numbers count up, bars grow from the left. Ignored by PDF and PowerPoint. */
+export type Anim = 'count' | 'grow';
+
 /** sans = Arial, serif = Georgia, display = Arial Black. All three exist on Windows, Mac and phones. */
 export type Font = 'sans' | 'serif' | 'display';
 
 export type Shape =
-  | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string | null; radius?: number; stroke?: string; strokeW?: number }
+  | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string | null; radius?: number; stroke?: string; strokeW?: number; anim?: Anim }
   | { type: 'ellipse'; x: number; y: number; w: number; h: number; fill: string | null; stroke?: string; strokeW?: number }
   | {
       type: 'text';
@@ -165,6 +175,7 @@ export type Shape =
       spacing?: number; // letter spacing in px
       font?: Font;
       italic?: boolean;
+      anim?: Anim;
     }
   | { type: 'image'; x: number; y: number; w: number; h: number; src: string }
   | {

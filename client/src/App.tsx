@@ -10,6 +10,9 @@ import { WeekPage } from './pages/WeekPage';
 import { SlidesPage } from './pages/SlidesPage';
 import { PrintPage } from './pages/PrintPage';
 import { TeamPage } from './pages/TeamPage';
+import { PresentPage } from './pages/PresentPage';
+import { RegionPage } from './pages/RegionPage';
+import { RegionPresentPage } from './pages/RegionPresentPage';
 
 /** Signed-in only. A team without members goes to setup first. */
 function RequireTeam() {
@@ -40,12 +43,16 @@ export default function App() {
               <Route element={<RequireTeam />}>
                 <Route path="/setup" element={<SetupPage />} />
                 <Route path="/print" element={<PrintPage />} />
+                <Route path="/present" element={<PresentPage />} />
                 <Route element={<Shell />}>
                   <Route index element={<WeekPage />} />
                   <Route path="/slides" element={<SlidesPage />} />
                   <Route path="/team" element={<TeamPage />} />
                 </Route>
               </Route>
+              {/* Region heads have their own login, separate from teams. */}
+              <Route path="/region" element={<RegionPage />} />
+              <Route path="/region/present/:teamId" element={<RegionPresentPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

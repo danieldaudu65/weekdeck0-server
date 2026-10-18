@@ -344,7 +344,7 @@ function bars(b: Kind<'summary'>['bars'], a: Area, c: SumColours): S[] {
     return [
       T(a.x, y, nameW - 10, h, x.name, fit(x.name, nameW - 10, h, 18, 11), c.ink, { bold: true }),
       R(a.x + nameW, y + (h - bh) / 2, trackW, bh, c.track, bh / 2),
-      R(a.x + nameW, y + (h - bh) / 2, x.value > 0 ? Math.max(bh, (x.value / max) * trackW) : 6, bh, i === 0 ? c.top : c.bar, bh / 2),
+      { ...R(a.x + nameW, y + (h - bh) / 2, x.value > 0 ? Math.max(bh, (x.value / max) * trackW) : 6, bh, i === 0 ? c.top : c.bar, bh / 2), anim: 'grow' } as S,
       T(a.x + a.w - valW, y, valW, h, x.label, 18, c.ink, { bold: true, align: 'right' }),
     ];
   });
@@ -361,7 +361,7 @@ function sumCards(s: Kind<'summary'>, a: Area, c: SumColours): S[] {
     out.push(
       R(x, a.y, cw, ch, c.card, c.radius),
       T(x + 26, a.y + 20, cw - 52, 30, st.label.toUpperCase(), 15, c.label, { bold: true, spacing: 1.5 }),
-      T(x + 26, a.y + 56, cw - 52, ch - 120, st.value, fit(st.value, cw - 52, ch - 120, 54, 18, c.font), c.value, { bold: true, font: c.font }),
+      T(x + 26, a.y + 56, cw - 52, ch - 120, st.value, fit(st.value, cw - 52, ch - 120, 54, 18, c.font), c.value, { bold: true, font: c.font, anim: 'count' }),
       T(x + 26, a.y + ch - 58, cw - 52, 40, st.sub, fit(st.sub, cw - 52, 40, 18, 11), c.sub),
     );
   });
@@ -380,7 +380,7 @@ function sumBig(s: Kind<'summary'>, a: Area, c: SumColours & { rule: string }): 
     const w = cw - (i ? 36 : 0) - 20;
     out.push(
       T(px, a.y, w, 28, st.label.toUpperCase(), 14, c.label, { bold: true, spacing: 2 }),
-      T(px, a.y + 34, w, ch - 90, st.value, fit(st.value, w, ch - 90, 64, 18, c.font), c.value, { bold: c.font !== 'serif', font: c.font }),
+      T(px, a.y + 34, w, ch - 90, st.value, fit(st.value, w, ch - 90, 64, 18, c.font), c.value, { bold: c.font !== 'serif', font: c.font, anim: 'count' }),
       T(px, a.y + ch - 50, w, 36, st.sub, fit(st.sub, w, 36, 17, 11), c.sub, { italic: c.font === 'serif' }),
     );
   });
@@ -903,6 +903,40 @@ const dashboard: StyleImpl = {
 
 const STYLE_IMPL: Record<string, StyleImpl> = { classic, corporate, bold, minimal, editorial, glow: glowStyle, playful, dashboard };
 
+/* ------------------------------------------------------------------ shared: map slide, notes */
+
+/** Text and card colours that suit a style's content slides (Night Glow is always dark). */
+function inkFor(styleId: string, t: Theme) {
+  if (styleId === 'glow') {
+    const g = glowColours(t);
+    return { ink: g.ink, muted: g.muted, card: g.card, accent: g.light };
+  }
+  if (styleId === 'dashboard') return { ink: t.ink, muted: t.muted, card: dash(t).card, accent: t.accent };
+  return { ink: t.ink, muted: t.muted, card: t.surface, accent: t.accent };
+}
+
+/** The map picture on the left, each day's stops listed on the right in the map's colours. */
+function mapContent(slide: Kind<'map'>, a: Area, c: ReturnType<typeof inkFor>, styleId: string): S[] {
+  const legendW = Math.min(360, a.w * 0.32);
+  const mw = a.w - legendW - 28;
+  const mh = Math.min(a.h, mw * (760 / 1200));
+  const out: S[] = [{ type: 'image', x: a.x, y: a.y, w: mw, h: mh, src: slide.image }];
+  if (styleId !== 'minimal' && styleId !== 'editorial') out.unshift(R(a.x - 6, a.y - 6, mw + 12, mh + 12, c.card, styleId === 'bold' ? 0 : 14));
+  const days = slide.days.filter((d) => d.stops.length);
+  const lx = a.x + mw + 28;
+  const rowH = Math.min(120, a.h / Math.max(1, days.length));
+  days.forEach((d, i) => {
+    const y = a.y + i * rowH;
+    const list = d.stops.map((s, n) => `${n + 1}. ${s}`).join('\n');
+    out.push(
+      O(lx, y + 4, 22, d.color),
+      T(lx + 32, y, legendW - 32, 30, d.day, 19, c.ink, { bold: true }),
+      T(lx + 32, y + 30, legendW - 32, rowH - 36, list, fit(list, legendW - 32, rowH - 36, 16, 10), c.muted, { valign: 'top' }),
+    );
+  });
+  return out;
+}
+
 /* ------------------------------------------------------------------ entry */
 
 /** Lay out one slide in a look (a Look, a saved id like "bold_coral", or an older palette-only id). */
@@ -912,12 +946,30 @@ export function layoutSlide(slide: DeckSlide, lookOrId: Look | string | Theme, c
   const t = look.palette;
   if (slide.kind === 'cover') return st.cover(slide, t);
   if (slide.kind === 'thanks') return st.thanks(slide, t);
-  const subtitle = slide.kind === 'table' || slide.kind === 'activities' ? slide.subtitle : '';
-  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind);
+  const subtitle = slide.kind === 'table' || slide.kind === 'activities' || slide.kind === 'map' ? slide.subtitle : '';
+  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind === 'map' ? 'activities' : slide.kind);
+  const ink = inkFor(look.style.id, t);
   let content: S[];
   switch (slide.kind) {
-    case 'summary':
-      content = st.summary(slide, f.area, t);
+    case 'summary': {
+      if (!slide.note) {
+        content = st.summary(slide, f.area, t);
+        break;
+      }
+      // Room at the bottom for the week's note (written by the manager or the AI).
+      const noteH = 78;
+      const a = { ...f.area, h: f.area.h - noteH - 18 };
+      const y = a.y + a.h + 18;
+      content = [
+        ...st.summary(slide, a, t),
+        R(f.area.x, y, f.area.w, noteH, ink.card, look.style.id === 'bold' || look.style.id === 'minimal' ? 0 : 16),
+        R(f.area.x, y, 8, noteH, ink.accent, 0),
+        T(f.area.x + 30, y + 6, f.area.w - 50, noteH - 12, slide.note, fit(slide.note, f.area.w - 50, noteH - 12, 21, 12), ink.ink, { italic: look.style.id === 'editorial', font: look.style.id === 'editorial' ? 'serif' : undefined }),
+      ];
+      break;
+    }
+    case 'map':
+      content = mapContent(slide, f.area, ink, look.style.id);
       break;
     case 'team':
       content = st.team(slide, f.area, t);

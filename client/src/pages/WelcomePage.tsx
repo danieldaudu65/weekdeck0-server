@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
+import { Link } from 'react-router';
 import { Download, FileUp, PencilLine } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
@@ -127,6 +128,12 @@ export function WelcomePage() {
             </p>
           </form>
         </Card>
+        <p className="text-center text-sm text-muted md:col-start-2">
+          Region head?{' '}
+          <Link to="/region" className="font-extrabold text-blue underline">
+            Open the region dashboard
+          </Link>
+        </p>
       </div>
     </div>
   );

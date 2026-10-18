@@ -9,6 +9,8 @@ interface AuthValue {
   register: (teamName: string, pin: string) => Promise<void>;
   logout: () => void;
   saveTeam: (profile: TeamProfile & { name?: string }) => Promise<Team>;
+  /** Replace the team after another call changed it (e.g. joining a region). */
+  setTeam: (team: Team) => void;
 }
 
 const Ctx = createContext<AuthValue | null>(null);
@@ -55,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return r.team;
   }, []);
 
-  const value = useMemo(() => ({ team, loading, login, register, logout, saveTeam }), [team, loading, login, register, logout, saveTeam]);
+  const value = useMemo(() => ({ team, loading, login, register, logout, saveTeam, setTeam }), [team, loading, login, register, logout, saveTeam]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
