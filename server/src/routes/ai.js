@@ -4,7 +4,8 @@
  * AI helpers (all optional, switched on by keys in server/.env):
  *   POST /ideas    activity ideas from the team's own history (Gemini or Claude)
  *   POST /summary  2–3 lines on how the week went, for the summary slide
- *   POST /events   real events near the team this week, found with Google Search (Gemini)
+ *   POST /events   real events near the team this week: web search (Tavily) + AI,
+ *                  or Gemini searching Google itself
  * Keys never leave the server.
  */
 const { Router } = require('express');
@@ -14,6 +15,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const { requireTeam } = require('../middleware/auth');
 const { cleanWeekStart, ValidationError, DAYS } = require('../utils/validate');
 const { generate, providers, AiError } = require('../utils/llm');
+const { searchEvents, SearchError } = require('../utils/webSearch');
+const { env } = require('../config/env');
 const { parseIdeas, parseEvents, weekDates, clip, DAY_NAMES } = require('../utils/aiIdeas');
 
 const router = Router();
@@ -129,7 +132,8 @@ router.post(
   '/events',
   perTeam(20, 'That’s a lot of event searches this hour. Try again later.'),
   asyncHandler(async (req, res) => {
-    if (!providers().search) return res.status(503).json({ error: { code: 'events_off', message: 'Event search needs a free Gemini key on the server.' } });
+    const useWeb = Boolean(env.tavilyKey);
+    if (!useWeb && !providers().search) return res.status(503).json({ error: { code: 'events_off', message: 'Event search needs a free Tavily (or Gemini) key on the server.' } });
     const weekStart = cleanWeekStart(req.body && req.body.weekStart);
     const team = req.team;
     const area = clip(req.body && req.body.area, 60) || clip(team.region, 40) || 'Lagos';
@@ -139,32 +143,67 @@ router.post(
     if (hit && Date.now() - hit.at < 6 * 60 * 60 * 1000) return res.json(hit.body);
 
     const dates = weekDates(weekStart);
-    const prompt = `Search Google for real public events and big gatherings happening in or near ${area}, Lagos State, Nigeria (including nearby areas) between ${dates[0].slice(4)} and ${dates[6].slice(4)}.
-${focus ? `Focus on: ${focus}.` : 'Look for: trade fairs and exhibitions, church crusades/conventions/programmes, mosque programmes, big market days, festivals, concerts, conferences, career/property expos, sports events, community events.'}
-They are for a real-estate sales team that goes where crowds are to meet potential land and home buyers.
-
+    const rules = `They are for a real-estate sales team that goes where crowds are to meet potential land and home buyers.
 Rules:
-- Only include events you found in search results, with a link to the page you found them on. Never invent events, places, dates or links.
-- The event must happen (at least partly) in that week. Skip anything you can't confirm.
+- Never invent events, places, dates or links.
+- The event must happen (at least partly) between ${dates[0].slice(4)} and ${dates[6].slice(4)}. Skip anything you can't confirm for those dates.
 - Up to 8 events, nearest to ${area} first.
 Day keys for that week: ${dates.join(', ')}.
-
 Reply with JSON only:
 {"events":[{"title":"...","place":"venue name","area":"neighbourhood, city","dates":"e.g. Thu 23 – Sun 26 Oct","days":["thu","fri"],"why":"one short line on why it's good for meeting buyers","url":"https://..."}]}
-If you find nothing reliable, reply {"events":[]}.`;
+If nothing reliable is found, reply {"events":[]}.`;
 
-    let reply;
-    try {
-      reply = await generate(prompt, { search: true, maxTokens: 1800 });
-    } catch (err) {
-      return aiFail(res, err);
+    let body;
+    if (useWeb) {
+      // 1. Search the web (Tavily), 2. let an AI pick out real events from those results only.
+      let results;
+      try {
+        results = await searchEvents(area, focus, weekStart);
+      } catch (err) {
+        if (err instanceof SearchError) return res.status(502).json({ error: { code: 'search_failed', message: err.message } });
+        throw err;
+      }
+      const leads = results.map((r) => ({ title: r.title, url: r.url, snippet: r.content.slice(0, 220), date: r.date }));
+      const sources = results.map((r) => ({ url: r.url, title: r.title }));
+      let events = [];
+      let note = '';
+      if (results.length && providers().text) {
+        const listing = results.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}${r.date ? `\nPublished: ${r.date}` : ''}\n${r.content}`).join('\n\n');
+        const prompt = `Below are web search results. Find real public events and big gatherings happening in or near ${area}, Lagos State, Nigeria.
+${focus ? `Focus on: ${focus}.` : ''}
+Use ONLY the information in these results. Each event's "url" must be the URL of the result it came from.
+${rules}
+
+SEARCH RESULTS:
+${listing}`;
+        try {
+          const reply = await generate(prompt, { maxTokens: 1800 });
+          events = parseEvents(reply.text, sources) || [];
+          events = events.filter((e) => e.verified); // keep only events tied to a real search result
+        } catch (err) {
+          if (!(err instanceof AiError)) throw err;
+          note = 'The AI couldn’t sort the results just now, so here are the search results to check yourself.';
+        }
+      }
+      body = { area, events, sources, leads, note, suggestionsHtml: '' };
+    } else {
+      const prompt = `Search Google for real public events and big gatherings happening in or near ${area}, Lagos State, Nigeria (including nearby areas) between ${dates[0].slice(4)} and ${dates[6].slice(4)}.
+${focus ? `Focus on: ${focus}.` : 'Look for: trade fairs and exhibitions, church crusades/conventions/programmes, mosque programmes, big market days, festivals, concerts, conferences, career/property expos, sports events, community events.'}
+Only include events you found in search results, with a link to the page you found them on.
+${rules}`;
+      let reply;
+      try {
+        reply = await generate(prompt, { search: true, maxTokens: 1800 });
+      } catch (err) {
+        return aiFail(res, err);
+      }
+      if (!reply.sources.length && !reply.suggestionsHtml) {
+        return res.status(502).json({ error: { code: 'no_search', message: 'The AI couldn’t search Google just now, so no events are shown. Try again.' } });
+      }
+      const events = parseEvents(reply.text, reply.sources);
+      if (!events) return res.status(502).json({ error: { code: 'ai_failed', message: 'The event list came back garbled. Try again.' } });
+      body = { area, events, sources: reply.sources, leads: [], note: '', suggestionsHtml: String(reply.suggestionsHtml || '').slice(0, 20000) };
     }
-    if (!reply.sources.length && !reply.suggestionsHtml) {
-      return res.status(502).json({ error: { code: 'no_search', message: 'The AI couldn’t search Google just now, so no events are shown. Try again.' } });
-    }
-    const events = parseEvents(reply.text, reply.sources);
-    if (!events) return res.status(502).json({ error: { code: 'ai_failed', message: 'The event list came back garbled. Try again.' } });
-    const body = { area, events, sources: reply.sources, suggestionsHtml: String(reply.suggestionsHtml || '').slice(0, 20000) };
     if (eventCache.size > 1000) eventCache.clear();
     eventCache.set(key, { at: Date.now(), body });
     res.json(body);

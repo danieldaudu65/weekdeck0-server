@@ -27,6 +27,15 @@ const env = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+  // Optional Groq (free, no card): writes ideas and summaries, and reads event search results.
+  groqKey: process.env.GROQ_API_KEY || '',
+  groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+  groqFallbacks: (process.env.GROQ_FALLBACK_MODELS || 'llama-3.3-70b-versatile,openai/gpt-oss-20b')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  // Optional Tavily (free 1,000 searches a month, no card): web search for "Events near us".
+  tavilyKey: process.env.TAVILY_API_KEY || '',
   // Optional real cover photos: Pixabay (free key at pixabay.com/api/docs) or Pexels.
   pixabayKey: process.env.PIXABAY_API_KEY || '',
   pexelsKey: process.env.PEXELS_API_KEY || '',

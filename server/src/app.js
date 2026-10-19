@@ -39,7 +39,7 @@ function createApp() {
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: 'draft-7', legacyHeaders: false }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, service: 'weekdeck-api', database: mongoose.connection.readyState === 1 ? 'connected' : 'not-connected', ai: Boolean(env.geminiKey || env.anthropicKey), events: Boolean(env.geminiKey), photos: Boolean(env.pixabayKey || env.pexelsKey) });
+    res.json({ ok: true, service: 'weekdeck-api', database: mongoose.connection.readyState === 1 ? 'connected' : 'not-connected', ai: Boolean(env.groqKey || env.geminiKey || env.anthropicKey), events: Boolean(env.tavilyKey || env.geminiKey), photos: Boolean(env.pixabayKey || env.pexelsKey) });
   });
   app.use('/api/auth', authRoutes);
   app.use('/api/team', teamRoutes);

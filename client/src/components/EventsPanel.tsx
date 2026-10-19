@@ -18,8 +18,14 @@ interface Result {
   area: string;
   events: FoundEvent[];
   sources: { url: string; title: string }[];
+  /** Plain search results, shown when no event could be confirmed (or the AI was busy). */
+  leads?: { title: string; url: string; snippet: string; date: string }[];
+  note?: string;
   suggestionsHtml: string;
 }
+
+/** A Google search for the same thing, for the manager to check by hand. */
+const googleUrl = (area: string, focus: string) => `https://www.google.com/search?q=${encodeURIComponent(`${focus || 'events'} in ${area} Lagos this week`)}`;
 
 const IDEAS = ['Trade fairs & exhibitions', 'Church crusades & conventions', 'Big market days', 'Concerts & festivals', 'Property expos'];
 
@@ -27,7 +33,7 @@ const IDEAS = ['Trade fairs & exhibitions', 'Church crusades & conventions', 'Bi
 export const eventLine = (e: FoundEvent) => (e.place ? `Market storm at ${e.place} (${e.title})` : `Market storm at ${e.title}`);
 
 /**
- * "Find events near us": the AI searches Google for real events in the team's
+ * "Find events near us": a web search finds real events in the team's
  * area this week. Each one shows where it was found; tap a day to add it.
  */
 export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { weekStart: string; region: string; added: (day: DayKey, line: string) => boolean; onAdd: (day: DayKey, line: string) => void; onClose: () => void }) {
@@ -61,7 +67,7 @@ export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { week
           <p className="flex items-center gap-2 font-extrabold">
             <Sparkles className="size-4 text-sun" aria-hidden /> Find events near us
           </p>
-          <p className="mt-0.5 text-xs text-white/70">The AI searches Google for real events this week. Every result shows where it was found.</p>
+          <p className="mt-0.5 text-xs text-white/70">Searches the web for real events this week. Every result shows where it was found.</p>
         </div>
         <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-full bg-white/10 hover:bg-white/20" aria-label="Close">
           <X className="size-4" aria-hidden />
@@ -105,18 +111,40 @@ export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { week
         {state === 'loading' && (
           <div className="space-y-2" aria-live="polite">
             <p className="flex items-center gap-2 text-sm font-semibold text-muted">
-              <Loader2 className="size-4 animate-spin" aria-hidden /> Searching Google for events around {area}…
+              <Loader2 className="size-4 animate-spin" aria-hidden /> Searching the web for events around {area}…
             </p>
             {[0, 1, 2].map((i) => (
               <div key={i} className="h-20 animate-pulse rounded-2xl bg-paper" />
             ))}
           </div>
         )}
-        {state === 'error' && <p className="rounded-xl bg-bad/10 px-3 py-2 text-sm font-semibold text-bad">{error}</p>}
+        {state === 'error' && (
+          <div className="space-y-2">
+            <p className="rounded-xl bg-bad/10 px-3 py-2 text-sm font-semibold text-bad">{error}</p>
+            <GoogleButton area={area} focus={focus} />
+          </div>
+        )}
         {state === 'done' && result && (
           <>
+            {result.note && <p className="mb-3 rounded-xl bg-sun-soft px-3 py-2 text-sm font-semibold text-[#7a4f00]">{result.note}</p>}
             {!result.events.length ? (
-              <p className="text-sm text-muted">No events could be confirmed online for {result.area} this week. Try a nearby area or another kind of event.</p>
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  {result.leads?.length ? 'No event could be confirmed for this exact week. These search results may still help:' : `No events could be confirmed online for ${result.area} this week. Try a nearby area or another kind of event.`}
+                </p>
+                {result.leads && result.leads.length > 0 && (
+                  <ul className="space-y-2">
+                    {result.leads.slice(0, 8).map((l) => (
+                      <li key={l.url} className="rounded-2xl bg-paper p-3">
+                        <a href={l.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-extrabold text-blue underline">
+                          {l.title} <ExternalLink className="size-3" aria-hidden />
+                        </a>
+                        {l.snippet && <p className="mt-1 line-clamp-2 text-xs text-muted">{l.snippet}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             ) : (
               <ul className="space-y-3">
                 {result.events.map((e) => (
@@ -125,7 +153,7 @@ export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { week
                       <p className="font-extrabold">{e.title}</p>
                       {e.verified ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-bold text-[#05603a]">
-                          <ShieldCheck className="size-3.5" aria-hidden /> Found on Google
+                          <ShieldCheck className="size-3.5" aria-hidden /> Found online
                         </span>
                       ) : (
                         <span className="rounded-full bg-sun-soft px-2 py-0.5 text-[11px] font-bold text-[#7a4f00]">Check the link</span>
@@ -186,6 +214,9 @@ export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { week
                 </ul>
               </details>
             )}
+            <div className="mt-3">
+              <GoogleButton area={area} focus={focus} />
+            </div>
             {/* Google asks apps that show search-grounded answers to show these search suggestions. */}
             {result.suggestionsHtml && (
               <iframe title="Google search suggestions" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={result.suggestionsHtml} className="mt-3 h-16 w-full rounded-xl border-0" />
@@ -194,5 +225,13 @@ export function EventsPanel({ weekStart, region, added, onAdd, onClose }: { week
         )}
       </div>
     </motion.div>
+  );
+}
+
+function GoogleButton({ area, focus }: { area: string; focus: string }) {
+  return (
+    <a href={googleUrl(area, focus)} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-extrabold ring-1 ring-line hover:ring-ink/30">
+      <Search className="size-3.5" aria-hidden /> Search on Google yourself <ExternalLink className="size-3" aria-hidden />
+    </a>
   );
 }

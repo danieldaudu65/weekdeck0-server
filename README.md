@@ -41,10 +41,12 @@ Browser (React)  ──/api──►  Node + Express  ──►  MongoDB
   with the route, an estimated distance and drive time, a “Find shortest
   order” button, and **Open in Google Maps** for each day (opens the phone’s
   Maps app with live traffic, free).
-- **Events near us** (needs the free `GEMINI_API_KEY`). Gemini searches Google
-  for real events in the team’s area that week (trade fairs, church
-  programmes, market days, expos…). Each result shows its source link; tap a
-  day to add it to the activities.
+- **Events near us** (needs the free `TAVILY_API_KEY`, plus `GROQ_API_KEY` to
+  sort the results; or a Gemini key). It searches the web for real events in
+  the team’s area that week (trade fairs, church programmes, market days,
+  expos…). Each event shows its source link; tap a day to add it. If the AI is
+  busy, the raw search results are shown, and **Search on Google yourself** is
+  always there.
 - **Week summary.** A note on the “Week at a glance” slide. **Write with AI**
   drafts it from the figures (Gemini or Claude); the manager can edit it.
 - **Present mode.** Full-screen slideshow from the Slides page: numbers count
@@ -105,6 +107,8 @@ In `server/.env` set:
 | `ADMIN_SECRET` | Optional, 16+ characters; lets you reset a forgotten PIN |
 | `DNS_SERVERS` | Optional. `8.8.8.8,1.1.1.1` if Atlas fails with `querySrv ECONNREFUSED` |
 | `PIXABAY_API_KEY` | Optional, free. Turns on real cover photos (Team → Cover photo → Find a photo). Sign up at pixabay.com, key at pixabay.com/api/docs. (`PEXELS_API_KEY` also works if you have one.) |
+| `GROQ_API_KEY` | Optional, free, no card. AI ideas, Write with AI, sorting event results. console.groq.com/keys |
+| `TAVILY_API_KEY` | Optional, free (1,000 searches/month), no card. Web search for Events near us. app.tavily.com |
 | `GEMINI_API_KEY` | Optional, free. Events near us, Write with AI, AI ideas. Get it at aistudio.google.com/apikey. `GEMINI_MODEL` picks the model |
 | `ANTHROPIC_API_KEY` | Optional. Turns on *AI ideas* (from platform.claude.com). `AI_MODEL` picks the model |
 

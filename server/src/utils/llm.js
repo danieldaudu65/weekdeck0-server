@@ -1,16 +1,21 @@
 'use strict';
 
 /**
- * One place to talk to an AI. Google Gemini (free tier, and the only one here
- * that can search Google for real events) or Anthropic Claude. Keys stay on
- * the server.
+ * One place to talk to an AI. For writing (ideas, summaries, reading search
+ * results) it tries, in order: Groq (free), Google Gemini, Anthropic Claude,
+ * whichever keys are set, moving on if one fails or is out of free quota.
+ * Gemini can also search Google itself. Keys stay on the server.
  */
 const { env } = require('../config/env');
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 
+/** Writing AIs in the order to try them. */
+const textProviders = () => [env.groqKey && 'groq', env.geminiKey && 'gemini', env.anthropicKey && 'anthropic'].filter(Boolean);
+
 const providers = () => ({
-  text: env.geminiKey ? 'gemini' : env.anthropicKey ? 'anthropic' : null,
+  text: textProviders()[0] || null,
+  textAll: textProviders(),
   search: env.geminiKey ? 'gemini' : null,
 });
 
@@ -115,6 +120,27 @@ async function gemini(prompt, opts) {
   throw new AiError(last && last.reason ? `The AI didn’t answer: ${last.reason}` : 'The AI didn’t answer just now. Try again in a minute.');
 }
 
+/** Groq: free, fast open models (OpenAI-style API). Tries the chosen model, then backups. */
+async function groq(prompt, { maxTokens }) {
+  const models = [...new Set([env.groqModel, ...(env.groqFallbacks || [])].filter(Boolean))];
+  let last = null;
+  for (const model of models) {
+    const r = await post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      { Authorization: `Bearer ${env.groqKey}` },
+      { model, messages: [{ role: 'user', content: prompt }], max_tokens: Math.max(maxTokens, 1200), temperature: 0.3 },
+      45_000,
+    );
+    const text = r.ok ? String((((r.data.choices || [])[0] || {}).message || {}).content || '') : '';
+    if (r.ok && text.trim()) return { text, sources: [], suggestionsHtml: '' };
+    last = { status: r.status, reason: googleReason(r.data) };
+    console.warn(`[weekdeck] Groq ${model} failed:`, r.status, last.reason);
+    if (r.status === 401) throw new AiError('The Groq key on the server isn’t valid. Check GROQ_API_KEY.');
+  }
+  if (last && last.status === 429) throw new AiError('Groq’s free limit is used up for now. Try again in a minute.');
+  throw new AiError(last && last.reason ? `The AI didn’t answer: ${last.reason}` : 'The AI didn’t answer just now.');
+}
+
 async function anthropic(prompt, { maxTokens }) {
   const r = await post(
     'https://api.anthropic.com/v1/messages',
@@ -135,16 +161,20 @@ async function anthropic(prompt, { maxTokens }) {
  */
 async function generate(prompt, { search = false, maxTokens = 900 } = {}) {
   const p = providers();
-  const which = search ? p.search : p.text;
-  if (!which) throw new AiError(search ? 'Event search needs a Gemini key on the server.' : 'AI is not switched on for this website.');
-  let out;
-  try {
-    out = which === 'gemini' ? await gemini(prompt, { search, maxTokens }) : await anthropic(prompt, { maxTokens });
-  } catch (err) {
-    if (err instanceof AiError) throw err;
-    throw new AiError('The AI didn’t answer just now. Check the internet and try again.');
+  const order = search ? (p.search ? [p.search] : []) : p.textAll;
+  if (!order.length) throw new AiError(search ? 'Event search needs a search key on the server.' : 'AI is not switched on for this website.');
+  let firstError = null;
+  for (const which of order) {
+    try {
+      const out =
+        which === 'gemini' ? await gemini(prompt, { search, maxTokens }) : which === 'groq' ? await groq(prompt, { maxTokens }) : await anthropic(prompt, { maxTokens });
+      return { ...out, sources: dedupe(out.sources), provider: which };
+    } catch (err) {
+      // Remember the first problem, then try the next AI.
+      firstError = firstError || (err instanceof AiError ? err : new AiError('The AI didn’t answer just now. Check the internet and try again.'));
+    }
   }
-  return { ...out, sources: dedupe(out.sources) };
+  throw firstError;
 }
 
 /** The first {...} block in a reply, parsed, or null. */
