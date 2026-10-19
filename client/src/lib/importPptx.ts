@@ -50,9 +50,10 @@ async function readRels(zip: import('jszip'), file: string): Promise<Map<string,
 
 export async function readPptx(file: File): Promise<{ result: ImportResult; coverImage: string }> {
   if (!/\.pptx$/i.test(file.name)) {
-    if (/\.pdf$/i.test(file.name)) throw new ImportError('PDF reading is coming soon. For now, upload the PowerPoint (.pptx) version.');
-    if (/\.ppt$/i.test(file.name)) throw new ImportError('This is an old .ppt file. Open it in PowerPoint and "Save as" .pptx, then upload that.');
-    throw new ImportError('Please choose a PowerPoint file (.pptx).');
+    // PDFs are read by pdf.js, loaded only when someone actually uploads one.
+    if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') return (await import('./importPdf')).readPdf(file);
+    if (/\.ppt$/i.test(file.name)) throw new ImportError('This is an old .ppt file. Open it in PowerPoint and "Save as" .pptx (or PDF), then upload that.');
+    throw new ImportError('Please choose a PowerPoint (.pptx) or PDF file.');
   }
   if (file.size > 40 * 1024 * 1024) throw new ImportError('That file is over 40 MB. Remove big pictures or videos and try again.');
 

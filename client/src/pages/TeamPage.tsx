@@ -148,7 +148,7 @@ export function TeamPage() {
           <span className="grid size-10 place-items-center rounded-xl bg-blue-soft text-blue">
             <FileUp className="size-5" aria-hidden />
           </span>
-          Import a PowerPoint again
+          Import last week’s slides again
         </Link>
         <ChangePin />
         <button type="button" onClick={logout} className="flex items-center gap-3 rounded-card border border-line bg-white p-4 text-left font-bold hover:border-bad">

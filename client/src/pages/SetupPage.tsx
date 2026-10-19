@@ -74,7 +74,7 @@ export function SetupPage() {
       setWarnings(result.warnings);
       setStage('review');
     } catch (err) {
-      setError(err instanceof ImportError ? err.message : 'That file couldn’t be read. Try saving it again from PowerPoint.');
+      setError(err instanceof ImportError ? err.message : 'That file couldn’t be read. Try saving it again as PowerPoint or PDF.');
       setStage('upload');
     }
   };
@@ -130,8 +130,8 @@ export function SetupPage() {
         <AnimatePresence mode="wait">
           {stage !== 'review' ? (
             <motion.section key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <h1 className="mt-4 text-3xl font-extrabold tracking-tight md:text-4xl">{isFirstTime ? `Welcome, ${team?.name}!` : 'Import a PowerPoint'}</h1>
-              <p className="mt-2 text-muted">Upload last week’s PowerPoint and WeekDeck fills everything in for you.</p>
+              <h1 className="mt-4 text-3xl font-extrabold tracking-tight md:text-4xl">{isFirstTime ? `Welcome, ${team?.name}!` : 'Import last week’s slides'}</h1>
+              <p className="mt-2 text-muted">Upload last week’s slides (PowerPoint or PDF) and WeekDeck fills everything in for you.</p>
               {stage === 'reading' ? (
                 <Card className="mt-8">
                   <Spinner label="Reading your slides…" />
@@ -152,10 +152,10 @@ export function SetupPage() {
                     <span className="grid size-16 place-items-center rounded-2xl bg-blue text-white shadow-lg">
                       <FileUp className="size-8" aria-hidden />
                     </span>
-                    <span className="text-xl font-extrabold">Tap to choose your PowerPoint</span>
-                    <span className="text-sm text-muted">or drag it here · .pptx files · it stays on your device while being read</span>
+                    <span className="text-xl font-extrabold">Tap to choose your slides</span>
+                    <span className="text-sm text-muted">or drag it here · PowerPoint (.pptx) or PDF · it stays on your device while being read</span>
                   </button>
-                  <input ref={fileRef} type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
+                  <input ref={fileRef} type="file" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
                   {error && (
                     <p role="alert" className="mt-4 flex gap-2 rounded-2xl bg-bad/10 p-4 text-sm font-semibold text-bad">
                       <TriangleAlert className="size-5 shrink-0" aria-hidden /> {error}
@@ -163,7 +163,7 @@ export function SetupPage() {
                   )}
                   <div className="mt-6 text-center">
                     <button type="button" className="font-bold text-blue underline underline-offset-4" onClick={() => setStage('review')}>
-                      No PowerPoint? Start from scratch
+                      No slides to upload? Start from scratch
                     </button>
                   </div>
                 </>
@@ -229,7 +229,7 @@ export function SetupPage() {
 
               {figures && (
                 <section>
-                  <SectionTitle>Figures from your PowerPoint</SectionTitle>
+                  <SectionTitle>Figures from your slides</SectionTitle>
                   <Card className="p-5">
                     <label className="flex items-start gap-3">
                       <input type="checkbox" className="mt-1 size-5 accent-[#2747D8]" checked={saveFigures} onChange={(e) => setSaveFigures(e.target.checked)} />

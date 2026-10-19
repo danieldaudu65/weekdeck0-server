@@ -9,8 +9,10 @@ export default defineConfig({
     // Local development: the website forwards /api to the Express server.
     proxy: { '/api': 'http://localhost:4100' },
   },
+  optimizeDeps: { esbuildOptions: { target: 'es2022' } },
   build: {
-    target: 'es2020',
+    // es2022: the PDF reader (pdf.js) uses top-level await. Every modern phone browser supports it.
+    target: 'es2022',
     rollupOptions: {
       output: {
         // The PowerPoint builder is big and only needed when downloading.

@@ -7,7 +7,7 @@ import { ApiError } from '../lib/api';
 import { Button, Card, Field, Logo } from '../components/ui';
 
 const steps = [
-  { icon: FileUp, title: 'Upload once', text: 'Drop in last week’s PowerPoint. WeekDeck reads your team, titles and activities.' },
+  { icon: FileUp, title: 'Upload once', text: 'Drop in last week’s PowerPoint or PDF. WeekDeck reads your team, titles and activities.' },
   { icon: PencilLine, title: 'Fill the week', text: 'Type each person’s figures. Totals and the monthly table add up by themselves.' },
   { icon: Download, title: 'Download', text: 'Pick a design and get your PowerPoint or PDF, ready to present.' },
 ];
