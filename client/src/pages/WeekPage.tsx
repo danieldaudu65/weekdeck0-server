@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth';
 import { useWeek } from '../lib/useWeek';
 import { useActivityMemory } from '../lib/useActivityMemory';
 import { planFromUsual } from '../lib/suggest';
+import { alreadyHas, quickBlend } from '../lib/blend';
 import { post, ApiError } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { ActivityInput } from '../components/ActivityInput';
@@ -83,11 +84,29 @@ export function WeekPage() {
     update((w) => ({ ...w, activities: { ...w.activities, ...usualPlan } }));
     toast(`Filled ${Object.keys(usualPlan).length} day${Object.keys(usualPlan).length === 1 ? '' : 's'} from your usual week`);
   };
-  const addLine = (d: DayKey, text: string) =>
-    update((w) => {
-      const cur = w.activities[d].trim();
-      return { ...w, activities: { ...w.activities, [d]: (cur ? `${cur}\n${text}` : text).slice(0, 600) } };
-    });
+  /**
+   * Add an idea or event to a day so it blends with what's there: joined into
+   * one line right away, then (if AI is on) smoothed into a natural sentence.
+   */
+  const [added, setAdded] = useState<Set<string>>(() => new Set());
+  const wasAdded = (d: DayKey, text: string) => added.has(`${weekStart}|${d}|${text}`) || (week ? alreadyHas(week.activities[d], text) : false);
+  const addLine = (d: DayKey, text: string) => {
+    if (!week) return;
+    setAdded((s) => new Set(s).add(`${weekStart}|${d}|${text}`));
+    const before = week.activities[d];
+    if (alreadyHas(before, text)) return toast(`${DAY_LONG[d]} already has that`);
+    const joined = quickBlend(before, text);
+    update((w) => ({ ...w, activities: { ...w.activities, [d]: joined } }));
+    if (!aiOn || !before.trim()) return;
+    post<{ text: string }>('/api/ai/blend', { current: before, addition: text })
+      .then((r) =>
+        update((w) =>
+          // Only replace if nobody has typed in that day since.
+          w.activities[d] === joined ? { ...w, activities: { ...w.activities, [d]: r.text.slice(0, 600) } } : w,
+        ),
+      )
+      .catch(() => undefined); // the quick join is already there
+  };
 
   const [ai, setAi] = useState<{ state: 'idle' | 'loading' } | { state: 'done'; ideas: { day: DayKey; text: string }[]; tip: string }>({ state: 'idle' });
   const askAi = async () => {
@@ -256,16 +275,16 @@ export function WeekPage() {
                         {ai.ideas
                           .filter((i) => i.day === d)
                           .map((i) => {
-                            const added = week.activities[d].includes(i.text);
+                            const done = wasAdded(i.day, i.text);
                             return (
                               <button
                                 key={i.text}
                                 type="button"
-                                disabled={added}
+                                disabled={done}
                                 onClick={() => addLine(d, i.text)}
                                 className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-left text-[13px] font-semibold hover:bg-white/20 disabled:opacity-50"
                               >
-                                {added ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />} {i.text}
+                                {done ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />} {i.text}
                               </button>
                             );
                           })}
@@ -279,7 +298,7 @@ export function WeekPage() {
               <EventsPanel
                 weekStart={weekStart}
                 region={team!.region}
-                added={(d, line) => week.activities[d].includes(line)}
+                added={wasAdded}
                 onAdd={(d, line) => {
                   addLine(d, line);
                   toast(`Added to ${DAY_LONG[d]}`);

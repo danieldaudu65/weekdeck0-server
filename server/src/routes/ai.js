@@ -81,6 +81,42 @@ Reply with JSON only: {"ideas":[{"day":"mon","text":"..."}],"tip":"..."} using d
   }),
 );
 
+/* ---------------------------------------------------------------- blend */
+
+/**
+ * Blends a new idea into what a day already says, as one natural line
+ * (instead of stacking it underneath). Every place name is kept exactly.
+ */
+router.post(
+  '/blend',
+  perTeam(120, 'Too many changes this hour. Try again a bit later.'),
+  asyncHandler(async (req, res) => {
+    if (!providers().text) return res.status(503).json({ error: { code: 'ai_off', message: 'AI is not switched on for this website.' } });
+    const current = clip(req.body && req.body.current, 600);
+    const addition = clip(req.body && req.body.addition, 200);
+    if (!current || !addition) throw new ValidationError('Nothing to blend.');
+    const prompt = `A real-estate sales team in Lagos writes its daily marketing activities on a weekly slide.
+Today's plan already says: "${current}"
+Add this new activity to it: "${addition}"
+
+Rewrite them as ONE short, natural plan for the day (like a team writes on a slide, under 170 characters if possible).
+Rules: keep every activity and keep every place name exactly as written; don't add new facts; no quotation marks; no full stop at the end.
+Reply with the rewritten plan only.`;
+    let reply;
+    try {
+      reply = await generate(prompt, { maxTokens: 200 });
+    } catch (err) {
+      return aiFail(res, err);
+    }
+    const text = clip(reply.text.replace(/^["'\s]+|["'.\s]+$/g, ''), 600);
+    // Guard: the blended line must still contain the places (capitalised words after "at") from both parts.
+    const places = (t) => [...t.matchAll(/\b(?:at|in|around)\s+([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*)*)/g)].map((m) => m[1].toLowerCase());
+    const lost = [...places(current), ...places(addition)].filter((p) => !text.toLowerCase().includes(p));
+    if (text.length < 8 || lost.length) return res.status(422).json({ error: { code: 'blend_unsafe', message: 'Couldn’t blend without losing a place.' } });
+    res.json({ text });
+  }),
+);
+
 /* ---------------------------------------------------------------- summary */
 
 router.post(
