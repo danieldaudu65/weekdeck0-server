@@ -23,7 +23,7 @@ const env = {
   geminiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   // Tried in order when the main model isn't available on the key's plan.
-  geminiFallbacks: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-2.5-flash,gemini-2.5-flash-lite')
+  geminiFallbacks: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite,gemini-3.6-flash')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),

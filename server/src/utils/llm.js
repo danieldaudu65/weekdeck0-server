@@ -93,10 +93,13 @@ async function geminiOnce(model, prompt, { search, maxTokens }) {
 
 async function gemini(prompt, opts) {
   let last = null;
+  const tried = [];
   for (const model of geminiModels()) {
     const r = await geminiOnce(model, prompt, opts);
     if (r.ok) return r.out;
-    last = { ...r, model };
+    tried.push({ ...r, model });
+    // Keep the most useful reason: a quota problem says more than "model not available".
+    last = tried.find((t) => t.status === 429) || { ...r, model };
     // A bad key or a blocked request won't get better with another model.
     if (r.status === 400 && /api key/i.test(r.reason)) throw new AiError('The Gemini key on the server isn’t valid. Check GEMINI_API_KEY.');
     if (r.status === 401 || r.status === 403) throw new AiError(`Google refused the request: ${r.reason || 'permission denied'}. Check the Gemini key and that the Gemini API is enabled for it.`);
@@ -105,7 +108,7 @@ async function gemini(prompt, opts) {
     const zero = /limit:\s*0\b/i.test(last.reason);
     throw new AiError(
       zero
-        ? 'Google’s free plan gives this key no allowance for these models. Open aistudio.google.com, check the key’s plan and quotas, or set GEMINI_MODEL to a model your key can use.'
+        ? `Google’s free plan gives this key no allowance for ${tried.map((t) => t.model).join(', ')}. Check the key’s plan at aistudio.google.com, or set GEMINI_MODEL to a model your key can use.`
         : 'Google’s free limit for this key is used up for now (per minute or per day). Try again later.',
     );
   }
