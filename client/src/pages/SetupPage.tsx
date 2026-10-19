@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, Check, FileUp, ImageOff, Sparkles, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { put, ApiError } from '../lib/api';
+import { api, put, ApiError } from '../lib/api';
 import { readPptx, ImportError } from '../lib/importPptx';
-import type { ImportedFigures } from '../lib/importAnalyze';
-import { DAYS, DAY_LONG, emptyActivities, type Activities, type TeamProfile } from '../lib/types';
+import type { ImportedFigures, ImportedMonthly, ImportResult } from '../lib/importAnalyze';
+import { planMonthlyWeeks } from '../lib/importMonthly';
+import { DAYS, DAY_LONG, emptyActivities, type Activities, type Member, type TeamProfile, type Week } from '../lib/types';
 import { addWeeks, mondayOf, weekRangeLabel } from '../lib/weeks';
 import { formatAmount, sumOrNull } from '../lib/money';
 import { Area, Button, Card, Field, Logo, SectionTitle, Spinner } from '../components/ui';
@@ -14,6 +15,31 @@ import { MembersEditor } from '../components/MembersEditor';
 import { useToast } from '../components/Toast';
 
 type Stage = 'upload' | 'reading' | 'review';
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Importing again must keep each member's id: saved weeks are linked to members by id,
+ * so new ids would make every earlier week show blank on the monthly slide.
+ */
+function keepMemberIds(result: ImportResult, existing: Member[]): ImportResult {
+  const idMap = new Map<string, string>();
+  const used = new Set<string>();
+  const members = result.members.map((m) => {
+    const old = existing.find((e) => !used.has(e.id) && sameName(e.name, m.name));
+    if (!old) return m;
+    used.add(old.id);
+    idMap.set(m.id, old.id);
+    return { ...m, id: old.id };
+  });
+  const id = (x: string) => idMap.get(x) ?? x;
+  return {
+    ...result,
+    members,
+    figures: result.figures?.map((f) => ({ ...f, memberId: id(f.memberId) })) ?? null,
+    monthly: result.monthly ? { ...result.monthly, rows: result.monthly.rows.map((r) => ({ ...r, memberId: id(r.memberId) })) } : null,
+  };
+}
 
 /**
  * First-time setup (and "import again"): upload last week's PowerPoint,
@@ -43,6 +69,7 @@ export function SetupPage() {
   }));
   const [activities, setActivities] = useState<Activities>(emptyActivities());
   const [figures, setFigures] = useState<ImportedFigures[] | null>(null);
+  const [monthly, setMonthly] = useState<ImportedMonthly | null>(null);
   const [saveFigures, setSaveFigures] = useState(true);
   const lastMonday = addWeeks(mondayOf(), -1);
   const [figuresWeek, setFiguresWeek] = useState(lastMonday);
@@ -55,7 +82,9 @@ export function SetupPage() {
     setError(null);
     setStage('reading');
     try {
-      const { result, coverImage } = await readPptx(file);
+      const read = await readPptx(file);
+      const result = keepMemberIds(read.result, team?.members ?? []);
+      const coverImage = read.coverImage;
       setProfile((p) => ({
         ...p,
         deckTitle: result.deckTitle || p.deckTitle,
@@ -70,6 +99,7 @@ export function SetupPage() {
       }));
       setActivities(result.activities);
       setFigures(result.figures);
+      setMonthly(result.monthly);
       setFound(result.found);
       setWarnings(result.warnings);
       setStage('review');
@@ -83,6 +113,32 @@ export function SetupPage() {
     e.preventDefault();
     setDragging(false);
     void handleFile(e.dataTransfer.files[0]);
+  };
+
+  const monthPlan = saveFigures ? planMonthlyWeeks(monthly, figures, figuresWeek) : [];
+
+  /** Earlier weeks from the monthly table. A week that already has figures in WeekDeck is never overwritten. */
+  const saveMonthlyWeeks = async (memberIds: Set<string>) => {
+    if (!monthPlan.length) return;
+    const starts = monthPlan.map((p) => p.weekStart).sort();
+    const { weeks } = await api<{ weeks: Week[] }>(`/api/weeks?from=${starts[0]}&to=${starts[starts.length - 1]}`);
+    const saved = new Map(weeks.map((w) => [w.weekStart, w]));
+    for (const p of monthPlan) {
+      const old = saved.get(p.weekStart);
+      // Only rows of today's members count: rows left behind by an old import (different ids) can be replaced.
+      const hasFigures = old?.rows.some((r) => memberIds.has(r.memberId) && (DAYS.some((d) => r[d] != null) || r.weekTotal != null));
+      if (hasFigures) continue;
+      const rows = p.rows
+        .filter((r) => memberIds.has(r.memberId))
+        .map((r) => ({ memberId: r.memberId, mon: null, tue: null, wed: null, thu: null, fri: null, nc: null, weekTotal: r.weekTotal }));
+      if (!rows.length) continue;
+      await put(`/api/weeks/${p.weekStart}`, {
+        rows,
+        activities: old?.activities ?? emptyActivities(),
+        note: old?.note ?? '',
+        places: old?.places ?? [],
+      });
+    }
   };
 
   const save = async () => {
@@ -101,6 +157,7 @@ export function SetupPage() {
           note: '',
         });
       }
+      await saveMonthlyWeeks(new Set(members.map((m) => m.id)));
       toast('All set! Your team is saved.');
       navigate('/');
     } catch (err) {
@@ -227,14 +284,14 @@ export function SetupPage() {
                 </Card>
               </section>
 
-              {figures && (
+              {(figures || monthly) && (
                 <section>
                   <SectionTitle>Figures from your slides</SectionTitle>
                   <Card className="p-5">
                     <label className="flex items-start gap-3">
                       <input type="checkbox" className="mt-1 size-5 accent-[#2747D8]" checked={saveFigures} onChange={(e) => setSaveFigures(e.target.checked)} />
                       <span>
-                        <span className="font-bold">Save these as an earlier week</span>
+                        <span className="font-bold">{figures ? 'Save these as an earlier week' : 'Save the monthly figures'}</span>
                         <span className="block text-sm text-muted">So your monthly table already includes them.</span>
                       </span>
                     </label>
@@ -253,7 +310,7 @@ export function SetupPage() {
                             );
                           })}
                         </select>
-                        <ul className="mt-4 divide-y divide-line rounded-2xl border border-line">
+                        {figures && <ul className="mt-4 divide-y divide-line rounded-2xl border border-line">
                           {figures.map((f) => {
                             const m = profile.members.find((x) => x.id === f.memberId);
                             const total = sumOrNull([f.mon, f.tue, f.wed, f.thu, f.fri]);
@@ -264,7 +321,23 @@ export function SetupPage() {
                               </li>
                             );
                           })}
-                        </ul>
+                        </ul>}
+                        {monthPlan.length > 0 && (
+                          <div className="mt-5">
+                            <p className="text-sm font-bold">Earlier weeks from your monthly table</p>
+                            <ul className="mt-2 divide-y divide-line rounded-2xl border border-line">
+                              {monthPlan.map((p) => (
+                                <li key={p.weekStart} className="flex justify-between gap-3 px-4 py-2.5 text-sm">
+                                  <span>
+                                    <span className="font-semibold">{p.label}</span> <span className="text-muted">· {weekRangeLabel(p.weekStart)}</span>
+                                  </span>
+                                  <span className="figures font-bold">₦{formatAmount(p.rows.reduce((a, r) => a + r.weekTotal, 0))}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="mt-2 text-xs text-muted">Weeks you already filled in WeekDeck are kept as they are.</p>
+                          </div>
+                        )}
                       </>
                     )}
                   </Card>

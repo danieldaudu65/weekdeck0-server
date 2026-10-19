@@ -1,38 +1,13 @@
 {
-  "name": "weekdeck-client",
+  "name": "weekdeck",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "description": "WeekDeck — weekly team slides for sales managers, ready in minutes.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b",
-    "preview": "vite preview",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "jszip": "^3.10.1",
-    "leaflet": "^1.9.4",
-    "lucide-react": "^0.511.0",
-    "motion": "^12.16.0",
-    "pdfjs-dist": "4.10.38",
-    "pptxgenjs": "^3.12.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router": "^7.6.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.1.8",
-    "@types/leaflet": "^1.9.17",
-    "@types/react": "^19.1.6",
-    "@types/react-dom": "^19.1.5",
-    "@vitejs/plugin-react": "^4.5.0",
-    "tailwindcss": "^4.1.8",
-    "typescript": "~5.8.3",
-    "vite": "^6.3.5",
-    "vitest": "^3.2.0"
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build:client": "npm --prefix client run build",
+    "check": "npm --prefix client run typecheck && npm --prefix server run check",
+    "test": "npm --prefix client test && npm --prefix server test"
   }
 }

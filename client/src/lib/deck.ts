@@ -40,7 +40,7 @@ export interface DeckInput {
   map?: { image: string; days: { day: string; color: string; stops: string[] }[] } | null;
 }
 
-const rowTotal = (r: WeekRow | undefined) => (r ? sumOrNull(DAYS.map((d) => r[d])) : null);
+const rowTotal = (r: WeekRow | undefined) => (r ? sumOrNull([...DAYS.map((d) => r[d]), r.weekTotal]) : null);
 
 /** Short names for the tables, the way teams write them: "OLORUNSOGO". Longer if two would clash. */
 function tableNames(team: Team): Map<string, string> {

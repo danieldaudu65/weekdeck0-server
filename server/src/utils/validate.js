@@ -132,6 +132,7 @@ function cleanWeek(raw, memberIds) {
     seen.add(memberId);
     const out = { memberId, nc: count(row.nc) };
     for (const d of DAYS) out[d] = amount(row[d]);
+    out.weekTotal = amount(row.weekTotal);
     rows.push(out);
   }
   const activities = {};

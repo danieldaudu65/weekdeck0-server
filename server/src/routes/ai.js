@@ -37,7 +37,7 @@ function aiFail(res, err) {
   throw err;
 }
 
-const sumRow = (r) => DAYS.reduce((a, d) => a + (Number(r && r[d]) || 0), 0);
+const sumRow = (r) => DAYS.reduce((a, d) => a + (Number(r && r[d]) || 0), 0) + (Number(r && r.weekTotal) || 0);
 const naira = (n) => `₦${Math.round(n).toLocaleString('en-US')}`;
 
 /* ---------------------------------------------------------------- ideas */

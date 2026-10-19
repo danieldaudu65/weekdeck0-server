@@ -20,7 +20,7 @@ import { WeekMap } from '../components/WeekMap';
 import { useWeekStops } from '../lib/stops';
 import type { FoundPlace } from '../lib/places';
 
-const rowTotal = (r: WeekRow) => sumOrNull(DAYS.map((d) => r[d]));
+const rowTotal = (r: WeekRow) => sumOrNull([...DAYS.map((d) => r[d]), r.weekTotal]);
 
 export function WeekPage() {
   const { team } = useAuth();
@@ -200,6 +200,18 @@ export function WeekPage() {
                           </div>
                         ))}
                       </div>
+                      {r.weekTotal != null && (
+                        <p className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-blue-soft px-3 py-2 text-xs font-semibold text-blue">
+                          <span>Includes ₦{formatAmount(r.weekTotal)} from your old monthly table (no daily split).</span>
+                          <button
+                            type="button"
+                            className="shrink-0 underline underline-offset-2"
+                            onClick={() => update((w) => ({ ...w, rows: w.rows.map((x) => (x.memberId === r.memberId ? { ...x, weekTotal: null } : x)) }))}
+                          >
+                            Remove
+                          </button>
+                        </p>
+                      )}
                       <div className="mt-3 flex items-center justify-between rounded-xl bg-paper px-3 py-2">
                         <span className="text-sm font-bold">New clients</span>
                         <div className="flex items-center gap-2">

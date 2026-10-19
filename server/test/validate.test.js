@@ -58,7 +58,7 @@ test('a week keeps only current members and cleans every figure', () => {
     ['m_abcd1', 'm_abcd2'],
   );
   assert.strictEqual(w.rows.length, 1);
-  assert.deepStrictEqual(w.rows[0], { memberId: 'm_abcd1', nc: 2, mon: 100000, tue: null, wed: null, thu: 500000, fri: null });
+  assert.deepStrictEqual(w.rows[0], { memberId: 'm_abcd1', nc: 2, mon: 100000, tue: null, wed: null, thu: 500000, fri: null, weekTotal: null });
   assert.strictEqual(w.activities.mon, 'NECA house, Alausa');
   assert.strictEqual(w.activities.fri.length, 600);
   assert.strictEqual(w.activities.tue, '');

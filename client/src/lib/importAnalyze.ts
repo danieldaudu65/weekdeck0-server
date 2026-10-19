@@ -7,7 +7,7 @@
  *  - a cover: title + manager line ("OLORUNSOGO SAMUEL (KSO)") + role ("(TEAM LEAD)")
  *  - a team slide: a heading with "TEAM" and a list of names
  *  - a weekly table: header with MON…FRI (+ NC, TOTAL)
- *  - a monthly table: header with WK 1…WK 4 (used for names only)
+ *  - a monthly table: header with WK 1…WK 4 (names + each week's total)
  *  - an activities slide: lines starting with Monday…Friday
  * Anything it can't find is left empty for the manager to fill in.
  */
@@ -37,6 +37,13 @@ export interface ImportedFigures {
   nc: number | null;
 }
 
+/** The monthly table: one total per member per WK column, in the order of the columns. */
+export interface ImportedMonthly {
+  /** Column labels as written ("WK 1", "WEEK 2"…). */
+  weeks: string[];
+  rows: { memberId: string; values: (number | null)[] }[];
+}
+
 export interface ImportResult {
   deckTitle: string;
   managerName: string;
@@ -49,6 +56,8 @@ export interface ImportResult {
   activities: Activities;
   /** Last week's figures from the weekly table, matched to members (null when there was no table). */
   figures: ImportedFigures[] | null;
+  /** Earlier weeks' totals from the monthly table (null when there was none). */
+  monthly: ImportedMonthly | null;
   coverPicture?: string;
   found: string[];
   warnings: string[];
@@ -78,12 +87,32 @@ const BULLET = /^[\s❖•▪▫◦●○■□►▶➢➤✓✔\-–—*·v]+(
 const ROLE_IN_PARENS = /\(([^)]*)\)/g;
 const LEAD_WORDS = /\b(team\s*lead|leader|manager|team\s*head|head)\b/i;
 
-/** Parse "100,000", "₦500,000", "500000" → number; anything else → null. */
+/**
+ * Parse a money/number cell the many ways managers type it:
+ * "100,000", "₦500,000", "N500,000", "NGN 500000", "500k", "1.2m", "500,000.00", "500 000".
+ * Empty, "-", "—", "nil" and anything else → null.
+ */
 export function parseNumberCell(raw: string): number | null {
-  const s = raw.replace(/[₦,\s]|ngn/gi, '');
-  if (!s) return null;
-  if (!/^\d+(\.\d+)?$/.test(s)) return null;
-  return Math.round(Number(s));
+  const s = raw
+    .toLowerCase()
+    .replace(/[\s\u00a0,₦=]/g, '')
+    .replace(/^(ngn|n)(?=\d)/, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, ''); // "500.000" written with dots
+  const m = /^(\d+(?:\.\d+)?)([km])?$/.exec(s);
+  if (!m) return null;
+  const mult = m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1;
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
+const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
+
+/** "WK 1", "WK1", "Week 2", "W3", "WEEK ONE", "1st week", "1ST WK" → 1…5; anything else → null. */
+export function weekColumnNumber(cell: string): number | null {
+  const c = cell.trim().toLowerCase().replace(/[.:]/g, ' ').replace(/\s+/g, ' ');
+  let m = /^(?:wk|week|w)\s*(\d)$/.exec(c) ?? /^(\d)(?:st|nd|rd|th)?\s*(?:wk|week)$/.exec(c);
+  if (m) return Number(m[1]);
+  m = /^(?:wk|week)\s*(one|two|three|four|five)$/.exec(c) ?? /^(first|second|third|fourth|fifth)\s*(?:wk|week)$/.exec(c);
+  return m ? WORD_NUM[m[1]] : null;
 }
 
 function cleanName(raw: string): { name: string; lead: boolean } | null {
@@ -129,7 +158,23 @@ function isWeeklyHeader(row: string[]) {
 }
 
 function isMonthlyHeader(row: string[]) {
-  return row.filter((c) => /^\s*(WK|WEEK)\s*\d/i.test(c)).length >= 2;
+  return row.filter((c) => weekColumnNumber(c) !== null).length >= 2;
+}
+
+/**
+ * Which column holds the names? A "NAME"/"MARKETER" header if there is one;
+ * otherwise the first column whose cells are mostly words (skips "S/N" number columns).
+ */
+function nameColumn(table: string[][]): number {
+  const header = table[0] ?? [];
+  const named = header.findIndex((h) => /name|marketer|member|staff|realtor|consultant/i.test(h));
+  if (named >= 0) return named;
+  const body = table.slice(1).filter((r) => !/^\s*total/i.test(r.join(' ')));
+  for (let c = 0; c < header.length; c++) {
+    const wordy = body.filter((r) => /\p{L}{2,}/u.test(r[c] ?? '') && parseNumberCell(r[c] ?? '') === null).length;
+    if (body.length && wordy >= body.length / 2) return c;
+  }
+  return 0;
 }
 
 /** Does a table's short name ("OLORUNSOGO") belong to a member ("Olorunsogo Samuel")? */
@@ -156,6 +201,7 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     members: [],
     activities: emptyActivities(),
     figures: null,
+    monthly: null,
     found,
     warnings,
   };
@@ -226,7 +272,7 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
   const rowNames = (table: string[][] | null) =>
     (table ?? [])
       .slice(1)
-      .map((r) => clean(r[0] ?? ''))
+      .map((r) => clean(r[nameColumn(table!)] ?? ''))
       .filter((n) => n && !/^total/i.test(n));
   if (!result.members.length) {
     const names = rowNames(weekly).length ? rowNames(weekly) : rowNames(monthly);
@@ -263,8 +309,9 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     };
     const figures: ImportedFigures[] = [];
     const unmatched: string[] = [];
+    const nameCol = nameColumn(weekly);
     for (const row of weekly.slice(1)) {
-      const name = clean(row[0] ?? '');
+      const name = clean(row[nameCol] ?? '');
       if (!name || /^total/i.test(name)) continue;
       const member = result.members.find((m) => nameMatches(name, m.name));
       if (!member) {
@@ -280,7 +327,24 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     }
     if (unmatched.length) warnings.push(`These names in the weekly table aren't in the team list: ${unmatched.join(', ')}. Add them to the team if they're members.`);
   }
-  if (monthly) found.push('monthly table');
+  // ---- Monthly table: each member's total per WK column (earlier weeks of the month)
+  if (monthly && monthly.length > 1) {
+    const header = monthly[0];
+    const cols = header.map((h, i) => ({ i, n: weekColumnNumber(h) })).filter((c) => c.n !== null);
+    const nameCol = nameColumn(monthly);
+    const rows: ImportedMonthly['rows'] = [];
+    for (const row of monthly.slice(1)) {
+      const name = clean(row[nameCol] ?? '');
+      if (!name || /^total/i.test(name)) continue;
+      const member = result.members.find((m) => nameMatches(name, m.name));
+      if (!member) continue;
+      rows.push({ memberId: member.id, values: cols.map((c) => parseNumberCell(row[c.i] ?? '')) });
+    }
+    if (rows.some((r) => r.values.some((v) => v !== null))) {
+      result.monthly = { weeks: cols.map((c) => clean(header[c.i])), rows };
+      found.push('monthly figures');
+    } else found.push('monthly table');
+  }
 
   // ---- Activities: the slide with the most lines starting with a weekday
   let best: SlideContent | null = null;

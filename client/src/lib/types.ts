@@ -42,6 +42,8 @@ export interface WeekRow {
   fri: number | null;
   /** Number of new clients that week. */
   nc: number | null;
+  /** A week total with no daily breakdown (from an imported monthly table). Added to the days. */
+  weekTotal?: number | null;
 }
 
 export type Activities = Record<DayKey, string>;

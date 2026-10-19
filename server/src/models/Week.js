@@ -11,6 +11,7 @@ const rowSchema = new mongoose.Schema(
     thu: { type: Number, default: null },
     fri: { type: Number, default: null },
     nc: { type: Number, default: null }, // number of new clients
+    weekTotal: { type: Number, default: null }, // a week total with no daily breakdown (imported monthly table)
   },
   { _id: false },
 );
@@ -49,7 +50,7 @@ weekSchema.index({ team: 1, weekStart: 1 }, { unique: true });
 weekSchema.methods.toPublic = function toPublic() {
   return {
     weekStart: this.weekStart,
-    rows: this.rows.map((r) => ({ memberId: r.memberId, mon: r.mon, tue: r.tue, wed: r.wed, thu: r.thu, fri: r.fri, nc: r.nc })),
+    rows: this.rows.map((r) => ({ memberId: r.memberId, mon: r.mon, tue: r.tue, wed: r.wed, thu: r.thu, fri: r.fri, nc: r.nc, weekTotal: r.weekTotal ?? null })),
     activities: {
       mon: this.activities.mon,
       tue: this.activities.tue,

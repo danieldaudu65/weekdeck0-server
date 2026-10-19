@@ -113,7 +113,7 @@ export function useDeck(opts: DeckOptions) {
   );
   const teamName = team?.name ?? '';
   const laid = useMemo(() => slides.map((s, i) => layoutSlide(s, look, { teamName, page: i + 1, total: slides.length })), [slides, look, teamName]);
-  const empty = Boolean(current && !current.week.rows.some((r) => r.mon || r.tue || r.wed || r.thu || r.fri || r.nc));
+  const empty = Boolean(current && !current.week.rows.some((r) => r.mon || r.tue || r.wed || r.thu || r.fri || r.nc || r.weekTotal));
 
   const fileName = `${teamName} - Week ${weekNumberInMonth(weekStart)} ${weekStart}`.replace(/[^\w .-]+/g, '').trim();
   return {

@@ -100,7 +100,7 @@ router.post(
 
 /* ---------------------------------------------------------------- dashboard */
 
-const sumRow = (r) => DAYS.reduce((a, d) => a + (Number(r && r[d]) || 0), 0);
+const sumRow = (r) => DAYS.reduce((a, d) => a + (Number(r && r[d]) || 0), 0) + (Number(r && r.weekTotal) || 0);
 /** Totals for one team's week, using only current members. */
 function weekStats(team, week) {
   const names = new Map(team.members.map((m) => [m.id, m.name]));
