@@ -11,6 +11,8 @@ import { SlidesPage } from './pages/SlidesPage';
 import { PrintPage } from './pages/PrintPage';
 import { TeamPage } from './pages/TeamPage';
 import { PresentPage } from './pages/PresentPage';
+import { PreviewPage } from './pages/PreviewPage';
+import { takeAfterLogin } from './lib/afterLogin';
 import { RegionPage } from './pages/RegionPage';
 import { RegionPresentPage } from './pages/RegionPresentPage';
 
@@ -27,7 +29,8 @@ function RequireTeam() {
 function PublicOnly() {
   const { team, loading } = useAuth();
   if (loading) return <Spinner label="Opening WeekDeck…" />;
-  return team ? <Navigate to="/" replace /> : <Outlet />;
+  // After logging in: where the manager chose to go (edit the week, or preview & present).
+  return team ? <Navigate to={takeAfterLogin()} replace /> : <Outlet />;
 }
 
 export default function App() {
@@ -44,6 +47,7 @@ export default function App() {
                 <Route path="/setup" element={<SetupPage />} />
                 <Route path="/print" element={<PrintPage />} />
                 <Route path="/present" element={<PresentPage />} />
+                <Route path="/preview" element={<PreviewPage />} />
                 <Route element={<Shell />}>
                   <Route index element={<WeekPage />} />
                   <Route path="/slides" element={<SlidesPage />} />

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
-import { Download, FileUp, PencilLine } from 'lucide-react';
+import { Download, FileUp, PencilLine, Play } from 'lucide-react';
+import { getOpenMode, setOpenMode, type OpenMode } from '../lib/afterLogin';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
 import { Button, Card, Field, Logo } from '../components/ui';
@@ -20,6 +21,7 @@ export function WelcomePage() {
   const [pin2, setPin2] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [openMode, setOpenModeState] = useState<OpenMode>(getOpenMode);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,6 +32,8 @@ export function WelcomePage() {
     if (mode === 'new' && pin !== pin2) return setError('The two PINs don’t match.');
     setBusy(true);
     try {
+      // A new team must set up first, so it always opens the editor.
+      setOpenMode(mode === 'login' ? openMode : 'edit');
       if (mode === 'login') await login(teamName, pin);
       else await register(teamName, pin);
     } catch (err) {
@@ -115,13 +119,36 @@ export function WelcomePage() {
             {mode === 'new' && (
               <Field label="Type the PIN again" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))} />
             )}
+            {mode === 'login' && (
+              <fieldset>
+                <legend className="mb-1.5 text-sm font-bold">Open</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { id: 'edit', icon: PencilLine, title: 'Edit my week', text: 'Type figures and plans' },
+                      { id: 'preview', icon: Play, title: 'Preview & present', text: 'See my slides, ready' },
+                    ] as const
+                  ).map(({ id, icon: Icon, title, text }) => (
+                    <label
+                      key={id}
+                      className={`flex cursor-pointer flex-col gap-1 rounded-2xl border-2 p-3 transition focus-within:ring-2 focus-within:ring-blue/40 ${openMode === id ? 'border-blue bg-blue-soft' : 'border-line bg-white hover:border-blue/40'}`}
+                    >
+                      <input type="radio" name="open" value={id} checked={openMode === id} onChange={() => setOpenModeState(id)} className="sr-only" />
+                      <Icon className={`size-5 ${openMode === id ? 'text-blue' : 'text-muted'}`} aria-hidden />
+                      <span className="text-sm font-extrabold leading-tight">{title}</span>
+                      <span className="text-xs text-muted">{text}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             {error && (
               <p role="alert" className="rounded-xl bg-bad/10 px-3 py-2.5 text-sm font-semibold text-bad">
                 {error}
               </p>
             )}
             <Button type="submit" size="lg" full loading={busy}>
-              {mode === 'login' ? 'Open my team' : 'Create my team'}
+              {mode === 'new' ? 'Create my team' : openMode === 'preview' ? 'Open my slides' : 'Open my team'}
             </Button>
             <p className="text-center text-xs text-muted">
               {mode === 'new' ? 'Share the PIN only with whoever prepares your slides.' : 'Forgot your PIN? Ask your region head to reset it.'}

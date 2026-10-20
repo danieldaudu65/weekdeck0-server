@@ -12,7 +12,9 @@ export function PresentPage() {
   const navigate = useNavigate();
   const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(params.get('week') ?? '') ? params.get('week')! : mondayOf();
   const deck = useDeck({ team, weekStart, includeSummary: params.get('summary') !== '0', includeMap: params.get('map') !== '0' });
-  const exit = () => navigate(`/slides?${params.toString()}`);
+  const fromPreview = params.get('back') === 'preview';
+  const exit = () => navigate(fromPreview ? `/preview?week=${weekStart}` : `/slides?${params.toString()}`);
+  const start = Math.max(0, Number(params.get('from')) || 0);
 
   if (deck.loading || deck.mapPending)
     return (
@@ -31,5 +33,5 @@ export function PresentPage() {
         </div>
       </div>
     );
-  return <Presenter slides={deck.laid} title={deck.fileName} onExit={exit} />;
+  return <Presenter slides={deck.laid} title={deck.fileName} onExit={exit} start={start} />;
 }

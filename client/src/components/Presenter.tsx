@@ -8,8 +8,8 @@ import { SlideCanvas } from './SlideCanvas';
  * F for full screen, Esc to leave. Each slide animates in (numbers count up,
  * bars grow). Works on a laptop, a phone, or a TV through the laptop.
  */
-export function Presenter({ slides, title, onExit }: { slides: { bg: string; shapes: Shape[] }[]; title: string; onExit: () => void }) {
-  const [i, setI] = useState(0);
+export function Presenter({ slides, title, onExit, start = 0 }: { slides: { bg: string; shapes: Shape[] }[]; title: string; onExit: () => void; start?: number }) {
+  const [i, setI] = useState(() => Math.min(start, Math.max(0, slides.length - 1)));
   const [chrome, setChrome] = useState(true);
   const [full, setFull] = useState(false);
   const hideTimer = useRef<number | undefined>(undefined);
