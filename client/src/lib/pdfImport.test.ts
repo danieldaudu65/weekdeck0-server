@@ -77,3 +77,46 @@ describe('PDF import', () => {
     expect(r.activities.thu).toBe('Training');
   });
 });
+
+describe('PDF tables found in real exported decks', () => {
+  const row = (top: number, cells: [string, number][]) => cells.map(([s, x]) => t(s, x, top, 12));
+  const cols = [60, 170, 280, 390, 500, 610, 720, 830];
+  const head = row(100, ['NAME', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'NC', 'TOTAL'].map((h, i) => [h, cols[i]] as [string, number]));
+
+  it('keeps reading after a member with no sales (a row with only a name)', () => {
+    const page = [
+      ...head,
+      ...row(130, [['ADEYEMI', 60], ['100,000', 170], ['100,000', 830]]),
+      ...row(160, [['BELLO', 60]]), // nothing sold
+      ...row(190, [['NWOSU', 60], ['50,000', 280], ['50,000', 830]]),
+      ...row(220, [['SANNI', 60], ['2,000,000', 500], ['2,000,000', 830]]),
+      ...row(250, [['TOTAL', 60]]),
+    ];
+    const table = pageToSlide(page, H, 3).tables[0];
+    expect(table.map((r) => r[0])).toEqual(['NAME', 'ADEYEMI', 'BELLO', 'NWOSU', 'SANNI', 'TOTAL']);
+    expect(table[4][4]).toBe('2,000,000');
+  });
+
+  it('puts back words and numbers broken by a narrow column', () => {
+    const page = [
+      ...head,
+      ...row(130, [['MARGARE', 60], ['1,300,0', 170], ['1,300,0', 830]]),
+      ...row(146, [['T', 60], ['00', 170], ['00', 830]]),
+      ...row(176, [['NNAMDI', 60], ['200,000', 280], ['200,000', 830]]),
+      ...row(206, [['VICTOR', 60]]),
+    ];
+    const table = pageToSlide(page, H, 3).tables[0];
+    expect(table[1].slice(0, 2)).toEqual(['MARGARET', '1,300,000']);
+    expect(table.map((r) => r[0])).toEqual(['NAME', 'MARGARET', 'NNAMDI', 'VICTOR']);
+  });
+
+  it('reads a cover whose lines are all one size (no "title" to find)', () => {
+    const r = analyzeSlides([
+      pageToSlide([t('WEEKLY PERFORMANCE REPORT.', 150, 240, 20), t('LEAD BY BLESSING', 300, 270, 20)], H, 1),
+      pageToSlide([t('TEAM MEMBERS', 300, 40, 28), t('', 10, 130, 28), t('ADEYEMI BLESSING', 60, 130, 28), t('', 10, 165, 28), t('OKORO JAMES', 60, 165, 28)], H, 2),
+    ]);
+    expect(r.deckTitle).toBe('Weekly Performance Report');
+    expect(r.members.map((m) => m.name)).toEqual(['Adeyemi Blessing', 'Okoro James']);
+    expect(r.managerName).toBe('Adeyemi Blessing');
+  });
+});

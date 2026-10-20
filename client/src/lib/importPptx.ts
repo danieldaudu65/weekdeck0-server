@@ -127,13 +127,36 @@ export async function readPptx(file: File): Promise<{ result: ImportResult; cove
   let coverImage = '';
   if (result.coverPicture && /\.(jpe?g|png|webp)$/i.test(result.coverPicture)) {
     const blob = await zip.file(result.coverPicture)?.async('blob');
-    if (blob) coverImage = await shrinkImage(blob).catch(() => '');
+    if (blob) coverImage = await shrinkImage(blob, 1000, true).catch(() => '');
   }
   return { result, coverImage };
 }
 
+/**
+ * Is this picture one plain colour (or almost fully see-through)? Slide themes hide many of
+ * those (masks, colour fills); they must never become a cover photo.
+ */
+export function isPlainImage(canvas: HTMLCanvasElement): boolean {
+  const s = document.createElement('canvas');
+  s.width = 24;
+  s.height = 24;
+  const ctx = s.getContext('2d')!;
+  ctx.drawImage(canvas, 0, 0, 24, 24);
+  const px = ctx.getImageData(0, 0, 24, 24).data;
+  let n = 0, sum = 0, sumSq = 0, see = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 32) see++;
+    const y = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    sum += y;
+    sumSq += y * y;
+    n++;
+  }
+  const spread = Math.sqrt(Math.max(0, sumSq / n - (sum / n) ** 2));
+  return spread < 6 || see > n * 0.8;
+}
+
 /** Resize a picture to at most 1000px and re-encode as JPEG, so it stays small (~100 KB). */
-export async function shrinkImage(blob: Blob, max = 1000): Promise<string> {
+export async function shrinkImage(blob: Blob, max = 1000, skipPlain = false): Promise<string> {
   const url = URL.createObjectURL(blob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -147,6 +170,7 @@ export async function shrinkImage(blob: Blob, max = 1000): Promise<string> {
     canvas.width = Math.round(img.naturalWidth * scale);
     canvas.height = Math.round(img.naturalHeight * scale);
     canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    if (skipPlain && isPlainImage(canvas)) return '';
     return canvas.toDataURL('image/jpeg', 0.8);
   } finally {
     URL.revokeObjectURL(url);

@@ -141,8 +141,12 @@ function fromParagraphs(paragraphs: SlideParagraph[]): Partial<Record<DayKey, st
 /** Activities written in a table: "Day | Activity" rows, or MON…FRI across the top. */
 function fromTables(tables: string[][][]): Partial<Record<DayKey, string>> {
   const out: Partial<Record<DayKey, string>> = {};
-  const isNumbery = (c: string) => /^[\s₦n,.\d km-]*$/i.test(c);
+  // Sales figures and "nothing" markers are never a plan.
+  const isNumbery = (c: string) => /^[\s₦n,.\d km-]*$/i.test(c) || /^\s*(nil|none|n\/a|na|null|—|–)\s*$/i.test(c);
+  // A sales table (NAME … MON … TOTAL) is not a plan table, whatever is in its cells.
+  const isSalesTable = (t: string[][]) => t.some((row) => row.some((c) => /^\s*(total|nc|n\/c|new clients?|target|names?|s\/n)\s*$/i.test(c)));
   for (const t of tables) {
+    if (isSalesTable(t)) continue;
     // Days down the first column(s): each row = a day.
     for (const row of t) {
       const dayCell = row.findIndex((c) => readDayLine(c)?.rest === '');

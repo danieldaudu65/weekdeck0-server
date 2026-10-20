@@ -8,7 +8,7 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { analyzeSlides, type ImportResult, type SlideContent } from './importAnalyze';
-import { ImportError } from './importPptx';
+import { ImportError, isPlainImage } from './importPptx';
 import { pageToSlide, type PdfTextPiece } from './pdfLayout';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -18,9 +18,10 @@ const MAX_PAGES = 30;
 export async function readPdf(file: File): Promise<{ result: ImportResult; coverImage: string }> {
   if (file.size > 40 * 1024 * 1024) throw new ImportError('That PDF is over 40 MB. Try saving it again with smaller pictures.');
 
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   let doc: pdfjs.PDFDocumentProxy;
   try {
-    doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    doc = await task.promise;
   } catch (err) {
     if ((err as { name?: string })?.name === 'PasswordException') throw new ImportError('This PDF is locked with a password. Save a copy without the password and upload that.');
     throw new ImportError("This PDF couldn't be opened. Make sure it's a real PDF file.");
@@ -64,7 +65,7 @@ export async function readPdf(file: File): Promise<{ result: ImportResult; cover
     result.coverPicture = undefined;
     return { result, coverImage };
   } finally {
-    void doc.destroy();
+    void task.destroy(); // frees the PDF worker (works in every pdf.js version)
   }
 }
 
@@ -86,39 +87,37 @@ function getObj(page: PDFPageProxy, id: string): Promise<PdfImage | null> {
   });
 }
 
-/** Find the largest photo on a page and return it as a small JPEG data URL ('' if none). */
+/** Find the largest real photo on a page and return it as a small JPEG data URL ('' if none). */
 async function biggestPicture(page: PDFPageProxy): Promise<string> {
   const ops = await page.getOperatorList();
-  let bestId = '';
-  let bestArea = 0;
+  const found = new Map<string, number>();
   ops.fnArray.forEach((fn, i) => {
     if (fn !== pdfjs.OPS.paintImageXObject && fn !== pdfjs.OPS.paintImageXObjectRepeat) return;
     const [id, w, h] = ops.argsArray[i] as [string, number, number];
     // Skip logos and icons: a cover photo is at least ~200px on each side.
-    if (typeof id === 'string' && w >= 200 && h >= 200 && w * h > bestArea) {
-      bestId = id;
-      bestArea = w * h;
-    }
+    if (typeof id === 'string' && w >= 200 && h >= 200) found.set(id, w * h);
   });
-  if (!bestId) return '';
-
-  const img = await getObj(page, bestId);
-  if (!img || !img.width || !img.height) return '';
-
-  const full = document.createElement('canvas');
-  full.width = img.width;
-  full.height = img.height;
-  const ctx = full.getContext('2d')!;
-  if (img.bitmap) ctx.drawImage(img.bitmap, 0, 0);
-  else if (img.data) ctx.putImageData(toImageData(img), 0, 0);
-  else return '';
-
-  const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
-  const out = document.createElement('canvas');
-  out.width = Math.round(img.width * scale);
-  out.height = Math.round(img.height * scale);
-  out.getContext('2d')!.drawImage(full, 0, 0, out.width, out.height);
-  return out.toDataURL('image/jpeg', 0.8);
+  // Biggest first; skip masks and plain fills (one colour), which slide themes are full of.
+  const candidates = [...found.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  for (const [id] of candidates) {
+    const img = await getObj(page, id);
+    if (!img || !img.width || !img.height) continue;
+    const full = document.createElement('canvas');
+    full.width = img.width;
+    full.height = img.height;
+    const ctx = full.getContext('2d')!;
+    if (img.bitmap) ctx.drawImage(img.bitmap, 0, 0);
+    else if (img.data) ctx.putImageData(toImageData(img), 0, 0);
+    else continue;
+    const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
+    const out = document.createElement('canvas');
+    out.width = Math.round(img.width * scale);
+    out.height = Math.round(img.height * scale);
+    out.getContext('2d')!.drawImage(full, 0, 0, out.width, out.height);
+    if (isPlainImage(out)) continue;
+    return out.toDataURL('image/jpeg', 0.8);
+  }
+  return '';
 }
 
 /** pdf.js raw pixels → ImageData (kind 1 = black/white bits, 2 = RGB, 3 = RGBA). */

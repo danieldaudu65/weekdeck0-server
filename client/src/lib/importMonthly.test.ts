@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeSlides, parseNumberCell, weekColumnNumber, type SlideContent } from './importAnalyze';
 import { planMonthlyWeeks } from './importMonthly';
+import { importedWeekFor } from './weeks';
 
 const slide = (index: number, tables: string[][][], paragraphs: string[] = []): SlideContent => ({ index, tables, paragraphs: paragraphs.map((text) => ({ text })) });
 
@@ -79,5 +80,23 @@ describe('monthly table', () => {
   it('keeps the imported week’s own column when there are no daily figures', () => {
     const plan = planMonthlyWeeks(r.monthly, null, '2026-10-19');
     expect(plan.map((p) => p.weekStart)).toEqual(['2026-10-05', '2026-10-12', '2026-10-19']);
+  });
+});
+
+describe('which week the uploaded slides belong to', () => {
+  const at = (iso: string) => new Date(`${iso}T10:00:00`);
+  it('Monday to Friday: last week (the slides are about the week that just ended)', () => {
+    expect(importedWeekFor(at('2026-10-19'))).toBe('2026-10-12'); // Monday of Week 3 → Week 2
+    expect(importedWeekFor(at('2026-10-20'))).toBe('2026-10-12'); // Tuesday
+    expect(importedWeekFor(at('2026-10-23'))).toBe('2026-10-12'); // Friday
+  });
+  it('Saturday and Sunday: the week that is finishing', () => {
+    expect(importedWeekFor(at('2026-10-24'))).toBe('2026-10-19');
+    expect(importedWeekFor(at('2026-10-25'))).toBe('2026-10-19');
+  });
+  it('never puts monthly figures into a week after the imported one', () => {
+    const monthly = { weeks: ['WK 1', 'WK 2', 'WK 3', 'WK 4'], rows: [{ memberId: 'a', values: [100, 200, 300, 400] }] };
+    const plan = planMonthlyWeeks(monthly, null, '2026-10-12');
+    expect(plan.every((p) => p.weekStart <= '2026-10-12')).toBe(true);
   });
 });

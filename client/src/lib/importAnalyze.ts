@@ -89,6 +89,8 @@ const stripEndDot = (s: string) => s.replace(/[\s.]+$/, '');
 const BULLET = /^[\s❖•▪▫◦●○■□►▶➢➤✓✔\-–—*·v]+(?=\S)/u;
 const ROLE_IN_PARENS = /\(([^)]*)\)/g;
 const LED_BY = /(^|[\s.,;:–—-])(?:lead|led|headed|managed|presented)\s+by[:\s]+(.+)$/i;
+/** Words that make a line a heading, never a person's name. */
+const TITLE_WORDS = /\b(weekly|week|report|session|strategic|strategy|performance|meeting|review|presentation|team|region|summary|sales|inflow|activities|plan|update|adron|homes|properties)\b/i;
 const LEAD_WORDS = /\b(team\s*lead|leader|manager|team\s*head|head)\b/i;
 
 /**
@@ -120,7 +122,8 @@ export function weekColumnNumber(cell: string): number | null {
 }
 
 function cleanName(raw: string): { name: string; lead: boolean } | null {
-  let s = raw.replace(BULLET, '');
+  // Any bullet: typed ones (❖ • ➢), numbers, and symbol-font bullets from PDFs (private-use characters).
+  let s = raw.replace(BULLET, '').replace(/^[^\p{L}\d(]+/u, '');
   s = s.replace(/^\s*\d+[.)]\s*/, ''); // "1. Name"
   let lead = false;
   s = s.replace(ROLE_IN_PARENS, (_m, inner: string) => {
@@ -170,6 +173,9 @@ function nameMatches(short: string, full: string) {
   const b = full.toLowerCase();
   if (!a) return false;
   if (a === b) return true;
+  // A name broken across lines in a narrow PDF column ("MARGARE T") still matches "Margaret".
+  const squashed = a.replace(/ /g, '');
+  if (squashed.length >= 4 && b.replace(/ /g, '').includes(squashed)) return true;
   const words = b.split(' ');
   return a.split(' ').every((w) => words.includes(w)) || b.startsWith(a);
 }
@@ -195,12 +201,17 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
 
   // ---- Cover: the first slide with a title placeholder (usually slide 1).
   let ledBy = '';
-  const cover = slides.find((s) => s.paragraphs.some((p) => p.ph === 'ctrTitle' || p.ph === 'title')) ?? slides[0];
+  // The cover is the first slide with any text (a logo-only first slide is skipped). Not "the first
+  // slide with a title box": PDFs have no title boxes, and a PDF cover in one font size has no "biggest" text.
+  const cover = slides.find((s) => s.paragraphs.some((p) => p.text.trim())) ?? slides[0];
   if (cover) {
-    const titleParas = cover.paragraphs.filter((p) => p.ph === 'ctrTitle' || p.ph === 'title');
-    const rest = cover.paragraphs.filter((p) => !(p.ph === 'ctrTitle' || p.ph === 'title') && clean(p.text) && p.ph !== 'sldNum');
+    const placeholderTitle = cover.paragraphs.filter((p) => p.ph === 'ctrTitle' || p.ph === 'title');
+    // No title box (plain text boxes, or a PDF): the first line is the title.
+    const firstLine = cover.paragraphs.find((p) => clean(p.text));
+    const titleParas = placeholderTitle.length ? placeholderTitle : firstLine ? [firstLine] : [];
+    const rest = cover.paragraphs.filter((p) => !titleParas.includes(p) && clean(p.text) && p.ph !== 'sldNum');
     // "WEEKLY PERFORMANCE REPORT. LEAD BY MARGARET": the "led by" part names the manager, not the deck.
-    const titleLines = (titleParas.length ? titleParas : cover.paragraphs.slice(0, 1)).map((p) => clean(p.text)).filter(Boolean);
+    const titleLines = titleParas.map((p) => clean(p.text)).filter(Boolean);
     const keep: string[] = [];
     for (const line of titleLines) {
       const by = LED_BY.exec(line);
@@ -227,7 +238,7 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
       if (!result.managerName) {
         const tags: string[] = [];
         const nameOnly = clean(t.replace(ROLE_IN_PARENS, (_m, inner: string) => (tags.push(inner.trim()), ' ')));
-        const n = cleanName(nameOnly);
+        const n = TITLE_WORDS.test(nameOnly) ? null : cleanName(nameOnly);
         if (n) {
           result.managerName = n.name;
           for (const tag of tags) {
@@ -268,6 +279,25 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
       result.members = names.map((n) => ({ id: newMemberId(), name: n.name, lead: n.lead }));
       found.push('team');
       break;
+    }
+    // The team written as a table (S/N | NAME | ROLE): names from the name column, the lead from the role.
+    const teamTable = s.tables.find((t) => t.length > 2 && !isWeeklyHeader(t[0]) && !isMonthlyHeader(t[0]));
+    if (teamTable) {
+      const col = nameColumn(teamTable);
+      const fromTable = teamTable
+        .slice(1)
+        .map((row) => {
+          const n = cleanName(row[col] ?? '');
+          const roleSaysLead = row.some((c, i) => i !== col && LEAD_WORDS.test(c));
+          return n ? { name: n.name, lead: n.lead || roleSaysLead } : null;
+        })
+        .filter((x): x is { name: string; lead: boolean } => Boolean(x));
+      if (fromTable.length >= 2) {
+        result.teamTitle = stripEndDot(titleCase(heading.text));
+        result.members = fromTable.map((n) => ({ id: newMemberId(), name: n.name, lead: n.lead }));
+        found.push('team');
+        break;
+      }
     }
   }
 

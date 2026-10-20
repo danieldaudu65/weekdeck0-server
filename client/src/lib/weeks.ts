@@ -14,6 +14,17 @@ export function mondayOf(date = new Date()): string {
   return toKey(local);
 }
 
+/**
+ * Which week do uploaded slides describe? They're made to present the week that just ENDED:
+ * Monday–Friday that's last week; on Saturday/Sunday it's the week finishing now.
+ * Imported figures go there, never into the new week.
+ */
+export function importedWeekFor(date = new Date()): string {
+  const dow = date.getDay(); // 0 Sun … 6 Sat
+  const thisMonday = mondayOf(date);
+  return dow === 0 || dow === 6 ? thisMonday : addWeeks(thisMonday, -1);
+}
+
 export function addWeeks(key: string, n: number): string {
   const d = fromKey(key);
   d.setUTCDate(d.getUTCDate() + n * 7);

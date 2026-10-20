@@ -8,7 +8,7 @@ import { readPptx, ImportError } from '../lib/importPptx';
 import type { ImportedFigures, ImportedMonthly, ImportResult } from '../lib/importAnalyze';
 import { planMonthlyWeeks } from '../lib/importMonthly';
 import { DAYS, DAY_LONG, emptyActivities, type Activities, type Member, type TeamProfile, type Week } from '../lib/types';
-import { addWeeks, mondayOf, weekRangeLabel } from '../lib/weeks';
+import { addWeeks, importedWeekFor, mondayOf, monthLabel, monthOf, weekNumberInMonth, weekRangeLabel } from '../lib/weeks';
 import { formatAmount, sumOrNull } from '../lib/money';
 import { Area, Button, Card, Field, Logo, SectionTitle, Spinner } from '../components/ui';
 import { MembersEditor } from '../components/MembersEditor';
@@ -71,8 +71,8 @@ export function SetupPage() {
   const [figures, setFigures] = useState<ImportedFigures[] | null>(null);
   const [monthly, setMonthly] = useState<ImportedMonthly | null>(null);
   const [saveFigures, setSaveFigures] = useState(true);
-  const lastMonday = addWeeks(mondayOf(), -1);
-  const [figuresWeek, setFiguresWeek] = useState(lastMonday);
+  // The uploaded slides are about the week that just ended, not the new one.
+  const [figuresWeek, setFiguresWeek] = useState(() => importedWeekFor());
   const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof TeamProfile>(k: K, v: TeamProfile[K]) => setProfile((p) => ({ ...p, [k]: v }));
@@ -298,18 +298,22 @@ export function SetupPage() {
                     {saveFigures && (
                       <>
                         <label className="mt-4 block text-sm font-bold" htmlFor="fw">
-                          Which week were they?
+                          Which week are these figures from?
                         </label>
                         <select id="fw" value={figuresWeek} onChange={(e) => setFiguresWeek(e.target.value)} className="mt-1.5 h-12 w-full rounded-2xl border border-line bg-white px-4 font-semibold">
                           {[0, -1, -2, -3, -4].map((n) => {
                             const w = addWeeks(mondayOf(), n);
                             return (
                               <option key={w} value={w}>
-                                {n === 0 ? 'This week' : n === -1 ? 'Last week' : `${-n} weeks ago`} · {weekRangeLabel(w)}
+                                {n === 0 ? 'This week' : n === -1 ? 'Last week' : `${-n} weeks ago`} · Week {weekNumberInMonth(w)} of {monthLabel(monthOf(w)).split(' ')[0]} · {weekRangeLabel(w)}
                               </option>
                             );
                           })}
                         </select>
+                        <p className="mt-2 text-xs text-muted">
+                          Saved in Week {weekNumberInMonth(figuresWeek)} only.
+                          {figuresWeek !== mondayOf() && ` This week (Week ${weekNumberInMonth(mondayOf())}) stays empty for your new figures.`}
+                        </p>
                         {figures && <ul className="mt-4 divide-y divide-line rounded-2xl border border-line">
                           {figures.map((f) => {
                             const m = profile.members.find((x) => x.id === f.memberId);
