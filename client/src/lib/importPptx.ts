@@ -13,10 +13,23 @@ export class ImportError extends Error {}
 
 const xml = (s: string) => new DOMParser().parseFromString(s, 'application/xml');
 
+/** Text of one paragraph. A line break typed with Shift+Enter (<a:br/>) becomes "\n". */
 function paragraphText(p: Element): string {
-  return Array.from(p.getElementsByTagNameNS(NS_A, 't'))
-    .map((t) => t.textContent ?? '')
-    .join('');
+  let out = '';
+  const walk = (el: Element) => {
+    for (const child of Array.from(el.children)) {
+      if (child.namespaceURI === NS_A && child.localName === 't') out += child.textContent ?? '';
+      else if (child.namespaceURI === NS_A && child.localName === 'br') out += '\n';
+      else walk(child);
+    }
+  };
+  walk(p);
+  return out;
+}
+
+/** One paragraph per visual line, so "Monday: …⏎Tuesday: …" typed in one paragraph still reads as two lines. */
+function pushLines(into: SlideParagraph[], text: string, ph?: string) {
+  for (const line of text.split('\n')) if (line.trim()) into.push(ph ? { text: line, ph } : { text: line });
 }
 
 function isInsideTable(el: Element): boolean {
@@ -81,15 +94,22 @@ export async function readPptx(file: File): Promise<{ result: ImportResult; cove
       const ph = sp.getElementsByTagNameNS(NS_P, 'ph')[0]?.getAttribute('type') ?? undefined;
       for (const p of Array.from(sp.getElementsByTagNameNS(NS_A, 'p'))) {
         if (isInsideTable(p)) continue;
-        const text = paragraphText(p);
-        if (text.trim()) paragraphs.push({ text, ph: ph ?? undefined });
+        pushLines(paragraphs, paragraphText(p), ph);
       }
+    }
+    // SmartArt (boxes and arrows drawn with Insert → SmartArt) keeps its text in a separate file.
+    const rels = await readRels(zip, path);
+    for (const target of rels.values()) {
+      if (!/\/diagrams\/data\d*\.xml$/i.test(target)) continue;
+      const raw = await zip.file(target)?.async('string');
+      if (!raw) continue;
+      for (const p of Array.from(xml(raw).getElementsByTagNameNS(NS_A, 'p'))) pushLines(paragraphs, paragraphText(p));
     }
     const tables: string[][][] = Array.from(doc.getElementsByTagNameNS(NS_A, 'tbl')).map((tbl) =>
       Array.from(tbl.getElementsByTagNameNS(NS_A, 'tr')).map((tr) =>
         Array.from(tr.getElementsByTagNameNS(NS_A, 'tc')).map((tc) =>
           Array.from(tc.getElementsByTagNameNS(NS_A, 'p'))
-            .map(paragraphText)
+            .map((p) => paragraphText(p).replace(/\n/g, ' '))
             .join(' ')
             .trim(),
         ),
@@ -98,7 +118,7 @@ export async function readPptx(file: File): Promise<{ result: ImportResult; cove
     let picture: string | undefined;
     const blip = doc.getElementsByTagNameNS(NS_A, 'blip')[0];
     const embed = blip?.getAttributeNS(NS_R, 'embed') ?? blip?.getAttribute('r:embed');
-    if (embed) picture = (await readRels(zip, path)).get(embed);
+    if (embed) picture = rels.get(embed);
     slides.push({ index: i + 1, paragraphs, tables, picture });
   }
   if (!slides.length) throw new ImportError('No slides were found in this file.');

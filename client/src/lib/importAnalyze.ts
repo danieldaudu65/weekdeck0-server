@@ -12,6 +12,9 @@
  * Anything it can't find is left empty for the manager to fill in.
  */
 import { DAYS, emptyActivities, newMemberId, type Activities, type DayKey, type Member } from './types';
+import { findActivities, readDayLine } from './importActivities';
+
+const DAY_NAMES: Record<DayKey, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday' };
 
 export interface SlideParagraph {
   text: string;
@@ -85,6 +88,7 @@ const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
 const stripEndDot = (s: string) => s.replace(/[\s.]+$/, '');
 const BULLET = /^[\s❖•▪▫◦●○■□►▶➢➤✓✔\-–—*·v]+(?=\S)/u;
 const ROLE_IN_PARENS = /\(([^)]*)\)/g;
+const LED_BY = /(^|[\s.,;:–—-])(?:lead|led|headed|managed|presented)\s+by[:\s]+(.+)$/i;
 const LEAD_WORDS = /\b(team\s*lead|leader|manager|team\s*head|head)\b/i;
 
 /**
@@ -129,23 +133,6 @@ function cleanName(raw: string): { name: string; lead: boolean } | null {
   const words = s.split(' ');
   if (words.length > 5 || !words.every((w) => /^[\p{L}'’.-]+$/u.test(w))) return null;
   return { name: titleCase(s), lead };
-}
-
-const DAY_RE = /^\s*(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?)\b[\s:,.\-–—]*(.*)$/i;
-
-function dayKeyOf(word: string): DayKey | null {
-  const w = word.toLowerCase();
-  if (w.startsWith('mon')) return 'mon';
-  if (w.startsWith('tue')) return 'tue';
-  if (w.startsWith('wed')) return 'wed';
-  if (w.startsWith('thu')) return 'thu';
-  if (w.startsWith('fri')) return 'fri';
-  return null;
-}
-
-function tidySentence(s: string): string {
-  const t = clean(s).replace(/\s+([.,;:])/g, '$1');
-  return t ? t[0].toUpperCase() + t.slice(1) : '';
 }
 
 function headerIndex(header: string[], test: (h: string) => boolean): number {
@@ -207,11 +194,23 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
   };
 
   // ---- Cover: the first slide with a title placeholder (usually slide 1).
+  let ledBy = '';
   const cover = slides.find((s) => s.paragraphs.some((p) => p.ph === 'ctrTitle' || p.ph === 'title')) ?? slides[0];
   if (cover) {
     const titleParas = cover.paragraphs.filter((p) => p.ph === 'ctrTitle' || p.ph === 'title');
     const rest = cover.paragraphs.filter((p) => !(p.ph === 'ctrTitle' || p.ph === 'title') && clean(p.text) && p.ph !== 'sldNum');
-    const title = clean((titleParas.length ? titleParas : cover.paragraphs.slice(0, 1)).map((p) => p.text).join(' '));
+    // "WEEKLY PERFORMANCE REPORT. LEAD BY MARGARET": the "led by" part names the manager, not the deck.
+    const titleLines = (titleParas.length ? titleParas : cover.paragraphs.slice(0, 1)).map((p) => clean(p.text)).filter(Boolean);
+    const keep: string[] = [];
+    for (const line of titleLines) {
+      const by = LED_BY.exec(line);
+      if (by) {
+        ledBy = clean(by[2].replace(ROLE_IN_PARENS, ' '));
+        const before = clean(line.slice(0, by.index));
+        if (before) keep.push(before);
+      } else keep.push(line);
+    }
+    const title = keep.join(' ');
     if (title) result.deckTitle = stripEndDot(titleCase(title));
     // Manager line = the first line that looks like a name; a line that's only "(…)" is the role.
     for (const p of rest) {
@@ -219,6 +218,10 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
       const onlyParens = /^\(([^)]*)\)$/.exec(t);
       if (onlyParens) {
         if (!result.managerRole) result.managerRole = titleCase(onlyParens[1]);
+        continue;
+      }
+      if (LED_BY.test(t) && !ledBy) {
+        ledBy = clean(LED_BY.exec(t)![2].replace(ROLE_IN_PARENS, ' '));
         continue;
       }
       if (!result.managerName) {
@@ -254,7 +257,7 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
   // ---- Team slide: heading with TEAM + a list of names
   for (const s of slides) {
     if (s === cover) continue;
-    const heading = s.paragraphs.find((p) => /\bteam\b/i.test(p.text) && !DAY_RE.test(p.text) && (p.ph === 'title' || p.text.length < 80));
+    const heading = s.paragraphs.find((p) => /\bteam\b/i.test(p.text) && !readDayLine(p.text) && (p.ph === 'title' || p.text.length < 80));
     if (!heading) continue;
     const names = s.paragraphs
       .filter((p) => p !== heading && p.ph !== 'sldNum' && p.ph !== 'title')
@@ -281,6 +284,16 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
       .filter((x): x is { name: string; lead: boolean } => Boolean(x))
       .map((n) => ({ id: newMemberId(), name: n.name, lead: false }));
     if (result.members.length) found.push('team');
+  }
+  // "Led by Margaret": use the full name from the team list ("Senaike Margaret") when it's there.
+  if (!result.managerName && ledBy) {
+    const m = result.members.find((x) => nameMatches(ledBy, x.name));
+    const n = cleanName(ledBy);
+    if (m) {
+      result.managerName = m.name;
+      if (!result.members.some((x) => x.lead)) m.lead = true;
+    } else if (n) result.managerName = n.name;
+    if (result.managerName && !found.includes('manager')) found.push('manager');
   }
   // Mark the manager as lead if no one is.
   if (result.managerName && result.members.length && !result.members.some((m) => m.lead)) {
@@ -346,28 +359,18 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     } else found.push('monthly table');
   }
 
-  // ---- Activities: the slide with the most lines starting with a weekday
-  let best: SlideContent | null = null;
-  let bestCount = 0;
-  for (const s of slides) {
-    const n = s.paragraphs.filter((p) => DAY_RE.test(p.text)).length;
-    if (n > bestCount) {
-      best = s;
-      bestCount = n;
-    }
-  }
-  if (best && bestCount >= 2) {
-    for (const p of best.paragraphs) {
-      const m = DAY_RE.exec(p.text);
-      if (!m) continue;
-      const key = dayKeyOf(m[1]);
-      if (key && !result.activities[key]) result.activities[key] = tidySentence(m[2]);
-    }
+  // ---- Activities (Monday–Friday plan): see importActivities.ts for every layout it understands.
+  const plan = findActivities(slides);
+  if (plan.slide) {
+    result.activities = plan.activities;
+    const best = plan.slide;
     const titleP =
-      best.paragraphs.find((p) => /activit|wpr|plan/i.test(p.text) && !DAY_RE.test(p.text)) ??
+      best.paragraphs.find((p) => /activit|wpr|plan|programme|program|schedule|strateg/i.test(p.text) && !readDayLine(p.text)) ??
       best.paragraphs.find((p) => p.ph === 'title');
     if (titleP) result.activitiesTitle = stripEndDot(titleCase(titleP.text.replace(/\.\s*/g, ' ')));
     found.push('activities');
+    const missing = DAYS.filter((d) => !result.activities[d]).map((d) => DAY_NAMES[d]);
+    if (missing.length && missing.length < 5) warnings.push(`No plan found for ${missing.join(', ')}. You can type it in.`);
   }
 
   if (!result.members.length) warnings.push("I couldn't find the team members. Add them below.");

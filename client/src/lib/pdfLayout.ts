@@ -11,6 +11,10 @@
  * Pure (no browser APIs) so it can be unit-tested.
  */
 import type { SlideContent, SlideParagraph } from './importAnalyze';
+import { readDayLine } from './importActivities';
+
+const isDayLabel = (s: string) => readDayLine(s)?.rest === '';
+const startsWithDay = (s: string) => readDayLine(s) !== null;
 
 export interface PdfTextPiece {
   str: string;
@@ -37,8 +41,6 @@ interface Line {
   cells: Cell[];
 }
 
-const DAY_ONLY = /^\s*(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?)\s*[:.\-–—]?\s*$/i;
-const DAY_START = /^\s*(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?)\b/i;
 const LIST_START = /^[\s❖•▪▫◦●○■□►▶➢➤✓✔\-–—*·]|^\s*\d+[.)]\s/u;
 
 const median = (xs: number[]) => {
@@ -187,7 +189,7 @@ export function pageToSlide(pieces: PdfTextPiece[], pageHeight: number, index: n
   for (const l of rest) {
     const ph = l.size >= titleSize ? 'title' : undefined;
     // "Monday:   Site visit…" keeps its day label; otherwise each cell is its own paragraph (names in columns).
-    const parts = l.cells.length > 1 && DAY_ONLY.test(l.cells[0].text) ? [l.cells.map((c) => c.text).join(' ')] : l.cells.map((c) => c.text);
+    const parts = l.cells.length > 1 && isDayLabel(l.cells[0].text) ? [l.cells.map((c) => c.text).join(' ')] : l.cells.map((c) => c.text);
     for (const text of parts) {
       const prev = paragraphs[paragraphs.length - 1];
       // A day line that wrapped onto the next line: join it back.
@@ -196,8 +198,8 @@ export function pageToSlide(pieces: PdfTextPiece[], pageHeight: number, index: n
         parts.length === 1 &&
         !ph &&
         !prev.ph &&
-        DAY_START.test(prev.text) &&
-        !DAY_START.test(text) &&
+        startsWithDay(prev.text) &&
+        !startsWithDay(text) &&
         !LIST_START.test(text) &&
         Math.abs(prev.size - l.size) <= l.size * 0.15 &&
         l.top - prev.top < l.size * 1.9;
