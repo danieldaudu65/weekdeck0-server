@@ -6,10 +6,11 @@ import { useAuth } from '../lib/auth';
 import { api, put, ApiError } from '../lib/api';
 import { readPptx, ImportError } from '../lib/importPptx';
 import type { ImportedFigures, ImportedMonthly, ImportResult } from '../lib/importAnalyze';
-import { planMonthlyWeeks } from '../lib/importMonthly';
+import { planMonthlyWeeks, slideTotal } from '../lib/importMonthly';
+import { chooseWeekStyle, decideImportWeek, planImportWeeks, type ImportWeekChoice } from '../lib/importSave';
 import { DAYS, DAY_LONG, emptyActivities, type Activities, type Member, type TeamProfile, type Week } from '../lib/types';
-import { addWeeks, importedWeekFor, mondayOf, monthLabel, monthOf, weekNumberInMonth, weekRangeLabel } from '../lib/weeks';
-import { formatAmount, sumOrNull } from '../lib/money';
+import { addWeeks, importedWeekFor, mondayOf, monthLabel, monthOf, weekNumberInMonth, weekRangeLabel, type WeekStyle } from '../lib/weeks';
+import { formatAmount } from '../lib/money';
 import { Area, Button, Card, Field, Logo, SectionTitle, Spinner } from '../components/ui';
 import { MembersEditor } from '../components/MembersEditor';
 import { useToast } from '../components/Toast';
@@ -73,6 +74,14 @@ export function SetupPage() {
   const [saveFigures, setSaveFigures] = useState(true);
   // The uploaded slides are about the week that just ended, not the new one.
   const [figuresWeek, setFiguresWeek] = useState(() => importedWeekFor());
+  // How the team numbers weeks; the uploaded slides can tell us (their "WK 3" for this week).
+  const [weekStyle, setWeekStyleState] = useState<WeekStyle>(team?.weekStyle ?? 'monday');
+  const [choice, setChoice] = useState<ImportWeekChoice | null>(null);
+  const [slideGrandTotal, setSlideGrandTotal] = useState<number | null>(null);
+  const pickWeek = (w: string) => {
+    setFiguresWeek(w);
+    setWeekStyleState((s) => chooseWeekStyle(choice?.slideNo ?? null, w, s));
+  };
   const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof TeamProfile>(k: K, v: TeamProfile[K]) => setProfile((p) => ({ ...p, [k]: v }));
@@ -84,6 +93,12 @@ export function SetupPage() {
     try {
       const read = await readPptx(file);
       const result = keepMemberIds(read.result, team?.members ?? []);
+      // The week (and the team's week numbering) come from the slides whenever they say.
+      const picked = decideImportWeek(result, new Date(), team?.weekStyle ?? 'monday', importedWeekFor());
+      setChoice(picked);
+      setFiguresWeek(picked.figuresWeek);
+      setWeekStyleState(picked.style);
+      setSlideGrandTotal(result.slideGrandTotal);
       const coverImage = read.coverImage;
       setProfile((p) => ({
         ...p,
@@ -117,47 +132,26 @@ export function SetupPage() {
 
   const monthPlan = saveFigures ? planMonthlyWeeks(monthly, figures, figuresWeek) : [];
 
-  /** Earlier weeks from the monthly table. A week that already has figures in WeekDeck is never overwritten. */
-  const saveMonthlyWeeks = async (memberIds: Set<string>) => {
-    if (!monthPlan.length) return;
-    const starts = monthPlan.map((p) => p.weekStart).sort();
-    const { weeks } = await api<{ weeks: Week[] }>(`/api/weeks?from=${starts[0]}&to=${starts[starts.length - 1]}`);
-    const saved = new Map(weeks.map((w) => [w.weekStart, w]));
-    for (const p of monthPlan) {
-      const old = saved.get(p.weekStart);
-      // Only rows of today's members count: rows left behind by an old import (different ids) can be replaced.
-      const hasFigures = old?.rows.some((r) => memberIds.has(r.memberId) && (DAYS.some((d) => r[d] != null) || r.weekTotal != null));
-      if (hasFigures) continue;
-      const rows = p.rows
-        .filter((r) => memberIds.has(r.memberId))
-        .map((r) => ({ memberId: r.memberId, mon: null, tue: null, wed: null, thu: null, fri: null, nc: null, weekTotal: r.weekTotal }));
-      if (!rows.length) continue;
-      await put(`/api/weeks/${p.weekStart}`, {
-        rows,
-        activities: old?.activities ?? emptyActivities(),
-        note: old?.note ?? '',
-        places: old?.places ?? [],
-      });
-    }
-  };
-
   const save = async () => {
     const members = profile.members.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     if (!members.length) return setError('Add at least one team member.');
     setError(null);
     setSaving(true);
     try {
-      await saveTeam({ ...profile, members });
-      const hasFigures = figures && figures.some((f) => sumOrNull([f.mon, f.tue, f.wed, f.thu, f.fri, f.nc]) !== null);
-      const hasActivities = DAYS.some((d) => activities[d]);
-      if ((saveFigures && hasFigures) || hasActivities) {
-        await put(`/api/weeks/${figuresWeek}`, {
-          rows: saveFigures && figures ? figures.filter((f) => members.some((m) => m.id === f.memberId)) : [],
-          activities,
-          note: '',
-        });
-      }
-      await saveMonthlyWeeks(new Set(members.map((m) => m.id)));
+      await saveTeam({ ...profile, members, weekStyle });
+      // Build on what's already saved: nothing typed in WeekDeck (notes, map pins, other people) is lost.
+      const starts = [figuresWeek, ...monthPlan.map((p) => p.weekStart)].sort();
+      const { weeks } = await api<{ weeks: Week[] }>(`/api/weeks?from=${starts[0]}&to=${starts[starts.length - 1]}`);
+      const toSave = planImportWeeks({
+        figures,
+        monthly,
+        activities,
+        saveFigures,
+        figuresWeek,
+        memberIds: new Set(members.map((m) => m.id)),
+        existing: new Map(weeks.map((w) => [w.weekStart, w])),
+      });
+      for (const w of toSave) await put(`/api/weeks/${w.weekStart}`, { rows: w.rows, activities: w.activities, note: w.note, places: w.places ?? [] });
       toast('All set! Your team is saved.');
       navigate('/');
     } catch (err) {
@@ -166,6 +160,10 @@ export function SetupPage() {
       setSaving(false);
     }
   };
+
+  // The week list: the last 5 weeks, plus the slide's week if it's older.
+  const weekOptions = [0, -1, -2, -3, -4].map((n) => addWeeks(mondayOf(), n));
+  if (!weekOptions.includes(figuresWeek)) weekOptions.push(figuresWeek);
 
   const isFirstTime = !team?.members.length;
 
@@ -300,24 +298,32 @@ export function SetupPage() {
                         <label className="mt-4 block text-sm font-bold" htmlFor="fw">
                           Which week are these figures from?
                         </label>
-                        <select id="fw" value={figuresWeek} onChange={(e) => setFiguresWeek(e.target.value)} className="mt-1.5 h-12 w-full rounded-2xl border border-line bg-white px-4 font-semibold">
-                          {[0, -1, -2, -3, -4].map((n) => {
-                            const w = addWeeks(mondayOf(), n);
+                        <select id="fw" value={figuresWeek} onChange={(e) => pickWeek(e.target.value)} className="mt-1.5 h-12 w-full rounded-2xl border border-line bg-white px-4 font-semibold">
+                          {weekOptions.map((w) => {
+                            const n = Math.round((Date.parse(w) - Date.parse(mondayOf())) / (7 * 86400000));
                             return (
                               <option key={w} value={w}>
-                                {n === 0 ? 'This week' : n === -1 ? 'Last week' : `${-n} weeks ago`} · Week {weekNumberInMonth(w)} of {monthLabel(monthOf(w)).split(' ')[0]} · {weekRangeLabel(w)}
+                                {n === 0 ? 'This week' : n === -1 ? 'Last week' : `${-n} weeks ago`} · Week {weekNumberInMonth(w, weekStyle)} of {monthLabel(monthOf(w, weekStyle)).split(' ')[0]} · {weekRangeLabel(w)}
                               </option>
                             );
                           })}
                         </select>
+                        {choice && choice.source !== 'default' && figuresWeek === choice.figuresWeek && (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-ok">
+                            <Check className="size-3.5" aria-hidden /> {choice.source === 'date' ? 'Taken from the date on your slides.' : `Your slides call it Week ${choice.slideNo}.`}
+                          </p>
+                        )}
+                        {weekStyle === 'first' && (
+                          <p className="mt-1 text-xs text-muted">Weeks are counted like on your slides: Week 1 is the week with the 1st of the month.</p>
+                        )}
                         <p className="mt-2 text-xs text-muted">
-                          Saved in Week {weekNumberInMonth(figuresWeek)} only.
-                          {figuresWeek !== mondayOf() && ` This week (Week ${weekNumberInMonth(mondayOf())}) stays empty for your new figures.`}
+                          Saved in Week {weekNumberInMonth(figuresWeek, weekStyle)} only.
+                          {figuresWeek !== mondayOf() && ` This week (Week ${weekNumberInMonth(mondayOf(), weekStyle)}) stays empty for your new figures.`}
                         </p>
                         {figures && <ul className="mt-4 divide-y divide-line rounded-2xl border border-line">
                           {figures.map((f) => {
                             const m = profile.members.find((x) => x.id === f.memberId);
-                            const total = sumOrNull([f.mon, f.tue, f.wed, f.thu, f.fri]);
+                            const total = slideTotal(f);
                             return (
                               <li key={f.memberId} className="flex justify-between px-4 py-2.5 text-sm">
                                 <span className="font-semibold">{m?.name ?? '—'}</span>
@@ -326,6 +332,12 @@ export function SetupPage() {
                             );
                           })}
                         </ul>}
+                        {figures && (
+                          <TotalCheck
+                            slide={slideGrandTotal}
+                            ours={figures.filter((f) => profile.members.some((m) => m.id === f.memberId)).reduce((a, f) => a + (slideTotal(f) ?? 0), 0)}
+                          />
+                        )}
                         {monthPlan.length > 0 && (
                           <div className="mt-5">
                             <p className="text-sm font-bold">Earlier weeks from your monthly table</p>
@@ -381,5 +393,21 @@ export function SetupPage() {
         </AnimatePresence>
       </main>
     </div>
+  );
+}
+
+/** "Your slide: ₦1,300,000 · WeekDeck: ₦1,300,000 ✓" — the manager sees the totals agree before saving. */
+function TotalCheck({ slide, ours }: { slide: number | null; ours: number }) {
+  if (slide === null) return <p className="mt-3 text-sm font-bold">Week total: ₦{formatAmount(ours)}</p>;
+  const same = slide === ours;
+  return (
+    <p className={`mt-3 flex items-start gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${same ? 'bg-ok/10 text-ok' : 'bg-sun-soft text-[#7a4f00]'}`}>
+      {same ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />}
+      <span>
+        {same
+          ? `Matches your slide: TOTAL ₦${formatAmount(slide)}`
+          : `Your slide’s TOTAL row says ₦${formatAmount(slide)}, but the people’s totals add up to ₦${formatAmount(ours)}. Check the figures above (the slide’s TOTAL row may have a mistake).`}
+      </span>
+    </p>
   );
 }

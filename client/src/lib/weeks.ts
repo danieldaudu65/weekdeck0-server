@@ -37,27 +37,46 @@ export function addDays(key: string, n: number): string {
   return toKey(d);
 }
 
-/** The month a week belongs to = the month of its Monday. */
-export function monthOf(weekStart: string): string {
-  return weekStart.slice(0, 7);
+/**
+ * How a team numbers its weeks. Teams do it two ways, and the slides must match theirs:
+ *  - 'monday': Week 1 is the first week whose MONDAY is in the month (a week belongs to its Monday's month).
+ *  - 'first':  Week 1 is the week with the 1st working day of the month (a week belongs to its Friday's month),
+ *              so "29 Sep – 3 Oct" is Week 1 of October.
+ */
+export type WeekStyle = 'monday' | 'first';
+
+let currentStyle: WeekStyle = 'monday';
+/** Set from the logged-in team, so every page counts weeks the team's way. */
+export function setWeekStyle(style: WeekStyle | undefined | null) {
+  currentStyle = style === 'first' ? 'first' : 'monday';
+}
+export function getWeekStyle(): WeekStyle {
+  return currentStyle;
 }
 
-/** Every Monday that falls in the month ("2026-10" → 5 Mondays in Oct 2026). */
-export function mondaysInMonth(month: string): string[] {
+/** The month a week belongs to ("2026-10"). */
+export function monthOf(weekStart: string, style: WeekStyle = currentStyle): string {
+  return (style === 'first' ? addDays(weekStart, 4) : weekStart).slice(0, 7);
+}
+
+/** Every week (its Monday) that belongs to the month ("2026-10" → 4 or 5 Mondays). */
+export function mondaysInMonth(month: string, style: WeekStyle = currentStyle): string[] {
   const [y, m] = month.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1, 1, 12));
+  d.setUTCDate(d.getUTCDate() - 7); // start a week early: with 'first', a September Monday can be in October
   while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1);
   const out: string[] = [];
-  while (d.getUTCMonth() === m - 1) {
-    out.push(toKey(d));
+  for (let i = 0; i < 7; i++) {
+    const key = toKey(d);
+    if (monthOf(key, style) === month) out.push(key);
     d.setUTCDate(d.getUTCDate() + 7);
   }
   return out;
 }
 
 /** 1-based position of the week in its month ("Week 2 of October"). */
-export function weekNumberInMonth(weekStart: string): number {
-  return mondaysInMonth(monthOf(weekStart)).indexOf(weekStart) + 1;
+export function weekNumberInMonth(weekStart: string, style: WeekStyle = currentStyle): number {
+  return mondaysInMonth(monthOf(weekStart, style), style).indexOf(weekStart) + 1;
 }
 
 const dayMonth = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });

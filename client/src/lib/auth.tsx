@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, getToken, post, put, setToken, SIGNED_OUT_EVENT } from './api';
 import type { Team, TeamProfile } from './types';
+import { setWeekStyle } from './weeks';
 
 interface AuthValue {
   team: Team | null;
@@ -18,6 +19,8 @@ const Ctx = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(Boolean(getToken()));
+  // Every page counts weeks the way this team does (set during render so it's ready before any page uses it).
+  setWeekStyle(team?.weekStyle);
 
   // Restore the session on open (the token stays on the phone, so the PIN is typed rarely).
   useEffect(() => {

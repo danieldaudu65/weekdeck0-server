@@ -117,12 +117,12 @@ router.get(
   asyncHandler(async (req, res) => {
     const weekStart = cleanWeekStart(req.query.week);
     const prevStart = addDays(weekStart, -7);
-    const mondays = mondaysOfMonth(weekStart);
-    const teams = await Team.find({ regionRef: req.region._id }).select('name teamTitle managerName region members templateId updatedAt').lean();
+    // Each team's month follows its own week numbering, so fetch both possible sets of weeks.
+    const monthWeeksFor = (style) => mondaysOfMonth(weekStart, style);
+    const teams = await Team.find({ regionRef: req.region._id }).select('name teamTitle managerName region members templateId weekStyle updatedAt').lean();
     const ids = teams.map((t) => t._id);
-    const weeks = ids.length
-      ? await Week.find({ team: { $in: ids }, weekStart: { $in: [...new Set([prevStart, ...mondays, weekStart])] } }).select('team weekStart rows updatedAt').lean()
-      : [];
+    const wanted = [...new Set([prevStart, weekStart, ...monthWeeksFor('monday'), ...monthWeeksFor('first')])];
+    const weeks = ids.length ? await Week.find({ team: { $in: ids }, weekStart: { $in: wanted } }).select('team weekStart rows updatedAt').lean() : [];
     const byTeam = new Map();
     for (const w of weeks) {
       const k = String(w.team);
@@ -134,7 +134,7 @@ router.get(
       const mine = byTeam.get(String(t._id)) || new Map();
       const now = weekStats(t, mine.get(weekStart));
       const prev = weekStats(t, mine.get(prevStart));
-      const month = mondays.reduce((a, m) => a + weekStats(t, mine.get(m)).total, 0);
+      const month = monthWeeksFor(t.weekStyle).reduce((a, m) => a + weekStats(t, mine.get(m)).total, 0);
       for (const p of now.per) if (p.total > 0 || p.nc) people.push({ name: p.name, team: t.teamTitle || t.name, total: p.total, nc: p.nc });
       const w = mine.get(weekStart);
       return {
@@ -183,7 +183,7 @@ router.get(
     const team = await regionTeam(req);
     if (!team) return res.status(404).json({ error: { code: 'not_found', message: 'That team isn’t in your region.' } });
     const weekStart = cleanWeekStart(req.query.week);
-    const mondays = mondaysOfMonth(weekStart);
+    const mondays = mondaysOfMonth(weekStart, team.weekStyle);
     const [week, monthWeeks, previous] = await Promise.all([
       Week.findOne({ team: team._id, weekStart }),
       Week.find({ team: team._id, weekStart: { $in: mondays } }).sort({ weekStart: 1 }),

@@ -54,8 +54,9 @@ export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary
   const names = tableNames(team);
   const byId = (w: Week | undefined | null) => new Map((w?.rows ?? []).map((r) => [r.memberId, r]));
   const thisWeek = byId(week);
-  const month = monthOf(week.weekStart);
-  const weekNo = weekNumberInMonth(week.weekStart);
+  const style = team.weekStyle ?? 'monday';
+  const month = monthOf(week.weekStart, style);
+  const weekNo = weekNumberInMonth(week.weekStart, style);
   const weekLabel = `Week ${weekNo} · ${weekRangeLabel(week.weekStart)}`;
   const slides: DeckSlide[] = [];
 
@@ -113,7 +114,7 @@ export function buildDeck({ team, week, monthWeeks, previousWeek, includeSummary
   slides.push({ kind: 'table', title: 'Weekly Breakdown Summary', subtitle: weekLabel, table: weekly });
 
   // ---- Monthly table: one column per Monday of the month
-  const mondays = mondaysInMonth(month);
+  const mondays = mondaysInMonth(month, style);
   const weeksByStart = new Map(monthWeeks.map((w) => [w.weekStart, w]));
   weeksByStart.set(week.weekStart, week); // the week being edited always counts, saved or not
   const monthRows = team.members.map((m) => {

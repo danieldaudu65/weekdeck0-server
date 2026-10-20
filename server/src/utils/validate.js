@@ -114,6 +114,7 @@ function cleanTeamProfile(raw) {
     templateId: /^[a-z0-9_-]{2,40}$/.test(String(r.templateId || '')) ? r.templateId : 'classic',
     members: cleanMembers(r.members || []),
     coverImage: cleanCoverImage(r.coverImage),
+    weekStyle: r.weekStyle === 'first' ? 'first' : 'monday',
   };
 }
 

@@ -22,6 +22,8 @@ export interface TeamProfile {
   members: Member[];
   /** Optional cover photo (small data URL), e.g. taken from their old cover slide. */
   coverImage: string;
+  /** How the team numbers weeks (see weeks.ts). Learned from their uploaded slides. */
+  weekStyle?: 'monday' | 'first';
 }
 
 export interface Team extends TeamProfile {

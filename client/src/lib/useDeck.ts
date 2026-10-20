@@ -42,7 +42,7 @@ export function useDeck(opts: DeckOptions) {
   const memberKey = localTeam ? localTeam.members.map((m) => m.id).join(',') : '';
   const teamRef = useRef(localTeam);
   teamRef.current = localTeam;
-  const sourceKey = remote ? `r:${remote.teamId}` : `t:${memberKey}`;
+  const sourceKey = remote ? `r:${remote.teamId}` : `t:${memberKey}:${localTeam?.weekStyle ?? 'monday'}`;
 
   useEffect(() => {
     let alive = true;
@@ -61,7 +61,8 @@ export function useDeck(opts: DeckOptions) {
         .then((r) => done(r.team, r.week, r.monthWeeks, r.previous))
         .catch(fail);
     } else if (teamRef.current) {
-      const mondays = mondaysInMonth(monthOf(weekStart));
+      const style = teamRef.current.weekStyle ?? 'monday';
+      const mondays = mondaysInMonth(monthOf(weekStart, style), style);
       Promise.all([
         api<{ week: Week | null }>(`/api/weeks/${weekStart}`),
         api<{ weeks: Week[] }>(`/api/weeks?from=${mondays[0]}&to=${mondays[mondays.length - 1]}`),
@@ -115,7 +116,7 @@ export function useDeck(opts: DeckOptions) {
   const laid = useMemo(() => slides.map((s, i) => layoutSlide(s, look, { teamName, page: i + 1, total: slides.length })), [slides, look, teamName]);
   const empty = Boolean(current && !current.week.rows.some((r) => r.mon || r.tue || r.wed || r.thu || r.fri || r.nc || r.weekTotal));
 
-  const fileName = `${teamName} - Week ${weekNumberInMonth(weekStart)} ${weekStart}`.replace(/[^\w .-]+/g, '').trim();
+  const fileName = `${teamName} - Week ${weekNumberInMonth(weekStart, team?.weekStyle ?? 'monday')} ${weekStart}`.replace(/[^\w .-]+/g, '').trim();
   return {
     loading: !current && !error,
     error,

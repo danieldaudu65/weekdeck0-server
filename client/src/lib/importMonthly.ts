@@ -10,7 +10,7 @@
 import { DAYS } from './types';
 import { sumOrNull } from './money';
 import { addWeeks } from './weeks';
-import type { ImportedFigures, ImportedMonthly } from './importAnalyze';
+import { weekColumnNumber, type ImportedFigures, type ImportedMonthly } from './importAnalyze';
 
 export interface PlannedWeek {
   weekStart: string;
@@ -18,9 +18,27 @@ export interface PlannedWeek {
   rows: { memberId: string; weekTotal: number }[];
 }
 
+/** A member's week total as the slide shows it: the TOTAL cell, or the days added up (whichever is bigger). */
+export function slideTotal(f: ImportedFigures): number | null {
+  const days = sumOrNull(DAYS.map((d) => f[d]));
+  if (f.total == null) return days;
+  return days == null ? f.total : Math.max(days, f.total);
+}
+
+/** The week number the slide gives the imported week ("WK 3" column = this week → 3), or null. */
+export function slideWeekNumber(monthly: ImportedMonthly | null, figures: ImportedFigures[] | null): number | null {
+  if (!monthly || !figures?.length) return null;
+  const c = anchorColumn(monthly, figures);
+  if (c < 0) return null;
+  // Only trust it when the column really matches this week's totals (not just "the last filled column").
+  const totals = new Map(figures.map((f) => [f.memberId, slideTotal(f)]));
+  const matched = monthly.rows.some((r) => r.values[c] != null && r.values[c]! > 0 && r.values[c] === totals.get(r.memberId));
+  return matched ? weekColumnNumber(monthly.weeks[c]) : null;
+}
+
 /** Which column is "this week"? The one matching the weekly totals; else the last column with numbers. */
 export function anchorColumn(monthly: ImportedMonthly, figures: ImportedFigures[] | null): number {
-  const weeklyTotal = new Map((figures ?? []).map((f) => [f.memberId, sumOrNull(DAYS.map((d) => f[d]))]));
+  const weeklyTotal = new Map((figures ?? []).map((f) => [f.memberId, slideTotal(f)]));
   let best = -1;
   let bestHits = 0;
   monthly.weeks.forEach((_, c) => {
@@ -44,7 +62,7 @@ export function planMonthlyWeeks(monthly: ImportedMonthly | null, figures: Impor
   if (!monthly) return [];
   const anchor = anchorColumn(monthly, figures);
   // No daily figures for the imported week? Then its monthly column is the only record of it: keep it too.
-  const hasDaily = (figures ?? []).some((f) => sumOrNull(DAYS.map((d) => f[d])) !== null);
+  const hasDaily = (figures ?? []).some((f) => slideTotal(f) !== null);
   const last = hasDaily ? anchor - 1 : anchor;
   const out: PlannedWeek[] = [];
   for (let c = 0; c <= last; c++) {

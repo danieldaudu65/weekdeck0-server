@@ -38,6 +38,14 @@ export interface ImportedFigures {
   thu: number | null;
   fri: number | null;
   nc: number | null;
+  /** The row's TOTAL as written on the slide (null when the table has no TOTAL column or it's empty). */
+  total: number | null;
+}
+
+/** What the slides say about which week they are: a date ("12 – 16 Oct 2026") and/or a week number ("WEEK 2"). */
+export interface SlideWeek {
+  date: { day: number; month: number; year: number | null } | null;
+  weekNo: number | null;
 }
 
 /** The monthly table: one total per member per WK column, in the order of the columns. */
@@ -61,6 +69,10 @@ export interface ImportResult {
   figures: ImportedFigures[] | null;
   /** Earlier weeks' totals from the monthly table (null when there was none). */
   monthly: ImportedMonthly | null;
+  /** Which week the slides say they are about. */
+  slideWeek: SlideWeek;
+  /** The weekly table's TOTAL row, bottom-right (to check WeekDeck's total matches the slide). */
+  slideGrandTotal: number | null;
   coverPicture?: string;
   found: string[];
   warnings: string[];
@@ -108,6 +120,46 @@ export function parseNumberCell(raw: string): number | null {
   if (!m) return null;
   const mult = m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1;
   return Math.round(parseFloat(m[1]) * mult);
+}
+
+/** New clients: "2", "2 clients", "02" → 2; anything else → null. */
+function parseCount(raw: string): number | null {
+  const m = /^\s*(\d{1,3})(\s|$|[a-z])/i.exec(raw);
+  return m ? Number(m[1]) : null;
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * Which week do the slides say they are? Give it the cover and the weekly sales slide only
+ * (NOT the plan slide: its dates belong to the coming week, not the figures' week):
+ * dates like "12 – 16 Oct 2026", "12th October, 2026", "Oct 12, 2026", "12/10/2026",
+ * and week numbers like "WEEK 2", "WK 3", "2ND WEEK".
+ */
+export function findSlideWeek(slides: (SlideContent | null | undefined)[]): SlideWeek {
+  const ordered = slides.filter((s): s is SlideContent => Boolean(s));
+  const texts = ordered.flatMap((s) => s.paragraphs.map((p) => p.text).concat(s.tables.flatMap((t) => (t[0] ? [t[0].join(' ')] : []))));
+  let date: SlideWeek['date'] = null;
+  let weekNo: number | null = null;
+  const mon = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\b\\.?';
+  for (const raw of texts) {
+    const t = raw.replace(/\s+/g, ' ');
+    if (!date) {
+      let m = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?(?:\\s*[-–—]\\s*\\d{1,2}(?:st|nd|rd|th)?)?\\s*(?:of\\s+)?${mon}\\s*,?\\s*(\\d{4})?`, 'i').exec(t);
+      if (m) date = { day: Number(m[1]), month: MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) + 1, year: m[3] ? Number(m[3]) : null };
+      else if ((m = new RegExp(`\\b${mon}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(\\d{4})?`, 'i').exec(t)))
+        date = { day: Number(m[2]), month: MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1, year: m[3] ? Number(m[3]) : null };
+      else if ((m = /\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b/.exec(t)))
+        date = { day: Number(m[1]), month: Number(m[2]), year: m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]) }; // Nigerian order: day/month/year
+      if (date && (date.month < 1 || date.month > 12 || date.day < 1 || date.day > 31)) date = null;
+    }
+    if (weekNo === null) {
+      const w = /\b(?:week|wk)\.?\s*(\d)\b/i.exec(t) ?? /\b(\d)(?:st|nd|rd|th)\s+(?:week|wk)\b/i.exec(t);
+      if (w && Number(w[1]) >= 1 && Number(w[1]) <= 5 && !/\bwk\s*\d\b.*\bwk\s*\d\b/i.test(t)) weekNo = Number(w[1]); // not a "WK 1 … WK 4" header
+    }
+    if (date && weekNo !== null) break;
+  }
+  return { date, weekNo };
 }
 
 const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
@@ -195,6 +247,8 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     activities: emptyActivities(),
     figures: null,
     monthly: null,
+    slideWeek: { date: null, weekNo: null },
+    slideGrandTotal: null,
     found,
     warnings,
   };
@@ -255,11 +309,15 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
 
   // ---- Tables
   let weekly: string[][] | null = null;
+  let weeklySlide: SlideContent | null = null;
   let monthly: string[][] | null = null;
   for (const s of slides) {
     for (const t of s.tables) {
       const hi = t.findIndex((row) => isWeeklyHeader(row));
-      if (hi >= 0 && !weekly) weekly = t.slice(hi);
+      if (hi >= 0 && !weekly) {
+        weekly = t.slice(hi);
+        weeklySlide = s;
+      }
       const mi = t.findIndex((row) => isMonthlyHeader(row));
       if (mi >= 0 && !monthly) monthly = t.slice(mi);
     }
@@ -339,6 +397,20 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
   const regionMatch = /([\p{L}]+)\s+region\b/iu.exec(result.teamTitle) ?? /\bregion[:\s]+([\p{L}]+)/iu.exec(result.teamTitle);
   if (regionMatch) result.region = titleCase(regionMatch[1]);
 
+  // People in the sales tables who aren't on the team slide are still on the team: their money must
+  // count, or WeekDeck's totals won't match the slide. They're added (and named in a note).
+  const added: string[] = [];
+  const memberFor = (raw: string) => {
+    const existing = result.members.find((m) => nameMatches(raw, m.name));
+    if (existing) return existing;
+    const n = cleanName(raw);
+    if (!n || TITLE_WORDS.test(raw) || /^(s\/?n|name|names|total|grand|sum)$/i.test(raw.trim())) return null;
+    const m = { id: newMemberId(), name: n.name, lead: false };
+    result.members.push(m);
+    added.push(n.name);
+    return m;
+  };
+
   // ---- Weekly figures → matched to members
   if (weekly && weekly.length > 1) {
     const header = weekly[0];
@@ -348,27 +420,32 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
       wed: headerIndex(header, (h) => h.startsWith('WED')),
       thu: headerIndex(header, (h) => h.startsWith('THU')),
       fri: headerIndex(header, (h) => h.startsWith('FRI')),
-      nc: headerIndex(header, (h) => h === 'NC' || h.startsWith('NEW CLIENT') || h === 'N/C'),
+      nc: headerIndex(header, (h) => h === 'NC' || h.startsWith('NEW CLIENT') || h === 'N/C' || h === 'N.C' || h === 'CLIENTS'),
     };
+    const totalCol = headerIndex(header, (h) => /^(TOTAL|TOTAL AMOUNT|AMOUNT|TOTAL SALES|WEEK TOTAL|SUM)$/.test(h.replace(/[:.]/g, '').trim()));
+    const mismatched: string[] = [];
     const figures: ImportedFigures[] = [];
-    const unmatched: string[] = [];
     const nameCol = nameColumn(weekly);
     for (const row of weekly.slice(1)) {
       const name = clean(row[nameCol] ?? '');
-      if (!name || /^total/i.test(name)) continue;
-      const member = result.members.find((m) => nameMatches(name, m.name));
-      if (!member) {
-        unmatched.push(titleCase(name));
+      if (/^(grand\s*)?total/i.test(name)) {
+        result.slideGrandTotal = totalCol >= 0 ? parseNumberCell(row[totalCol] ?? '') : null;
         continue;
       }
+      if (!name) continue;
+      const member = memberFor(name);
+      if (!member) continue;
       const cell = (i: number) => (i >= 0 ? parseNumberCell(row[i] ?? '') : null);
-      figures.push({ memberId: member.id, mon: cell(col.mon), tue: cell(col.tue), wed: cell(col.wed), thu: cell(col.thu), fri: cell(col.fri), nc: cell(col.nc) });
+      const f: ImportedFigures = { memberId: member.id, mon: cell(col.mon), tue: cell(col.tue), wed: cell(col.wed), thu: cell(col.thu), fri: cell(col.fri), nc: col.nc >= 0 ? parseCount(row[col.nc] ?? '') : null, total: cell(totalCol) };
+      const days = [f.mon, f.tue, f.wed, f.thu, f.fri].reduce<number | null>((a, v) => (v == null ? a : (a ?? 0) + v), null);
+      if (f.total != null && days != null && f.total < days) mismatched.push(`${member.name} (TOTAL ₦${f.total.toLocaleString('en-NG')}, days add up to ₦${days.toLocaleString('en-NG')})`);
+      figures.push(f);
     }
     if (figures.length) {
       result.figures = figures;
       found.push('weekly figures');
     }
-    if (unmatched.length) warnings.push(`These names in the weekly table aren't in the team list: ${unmatched.join(', ')}. Add them to the team if they're members.`);
+    if (mismatched.length) warnings.push(`On the slide, these TOTALs are less than the days added up, so the days were used: ${mismatched.join('; ')}.`);
   }
   // ---- Monthly table: each member's total per WK column (earlier weeks of the month)
   if (monthly && monthly.length > 1) {
@@ -379,15 +456,21 @@ export function analyzeSlides(slides: SlideContent[]): ImportResult {
     for (const row of monthly.slice(1)) {
       const name = clean(row[nameCol] ?? '');
       if (!name || /^total/i.test(name)) continue;
-      const member = result.members.find((m) => nameMatches(name, m.name));
+      const values = cols.map((c) => parseNumberCell(row[c.i] ?? ''));
+      // Someone only in the monthly table is added only if they have figures there.
+      const member = result.members.find((m) => nameMatches(name, m.name)) ?? (values.some((v) => v !== null) ? memberFor(name) : null);
       if (!member) continue;
-      rows.push({ memberId: member.id, values: cols.map((c) => parseNumberCell(row[c.i] ?? '')) });
+      rows.push({ memberId: member.id, values });
     }
     if (rows.some((r) => r.values.some((v) => v !== null))) {
       result.monthly = { weeks: cols.map((c) => clean(header[c.i])), rows };
       found.push('monthly figures');
     } else found.push('monthly table');
   }
+
+  if (added.length) warnings.push(`Added from your sales tables (not on the team slide): ${added.join(', ')}. Remove anyone who has left the team.`);
+
+  result.slideWeek = findSlideWeek([cover, weeklySlide]);
 
   // ---- Activities (Monday–Friday plan): see importActivities.ts for every layout it understands.
   const plan = findActivities(slides);
