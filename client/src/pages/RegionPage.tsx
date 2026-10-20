@@ -8,9 +8,11 @@ import { formatNaira } from '../lib/money';
 import { addWeeks, mondayOf, weekNumberInMonth, weekRangeLabel } from '../lib/weeks';
 import { Button, Card, Field, Logo, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { useRegionHead } from '../lib/useRegionHead';
 
 /** Region head: log in, then see every team in the region for any week. */
 export function RegionPage() {
+  useRegionHead();
   const [token, setToken] = useState(getRegionToken());
   const signIn = (t: string) => {
     setRegionToken(t);

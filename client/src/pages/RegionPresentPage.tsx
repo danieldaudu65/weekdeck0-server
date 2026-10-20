@@ -4,9 +4,11 @@ import { useDeck } from '../lib/useDeck';
 import { mondayOf } from '../lib/weeks';
 import { Presenter } from '../components/Presenter';
 import { Spinner } from '../components/ui';
+import { useRegionHead } from '../lib/useRegionHead';
 
 /** A region head presenting one team's deck (read-only). */
 export function RegionPresentPage() {
+  useRegionHead();
   const token = getRegionToken();
   const { teamId = '' } = useParams();
   const [params] = useSearchParams();

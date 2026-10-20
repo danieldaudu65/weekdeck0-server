@@ -1,1 +1,4 @@
-/*    /index.html   200
+# The region link has its own page head (icon + WhatsApp/link preview), built to /region/index.html.
+/region      /region/index.html   200
+/region/*    /region/index.html   200
+/*           /index.html          200

@@ -1,0 +1,15 @@
+{
+  "name": "WeekDeck Region",
+  "short_name": "WD Region",
+  "description": "Every team’s week in one view.",
+  "start_url": "/region",
+  "scope": "/region",
+  "display": "standalone",
+  "background_color": "#F4F5F9",
+  "theme_color": "#2747D8",
+  "icons": [
+    { "src": "/region-android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/region-android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/region-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
