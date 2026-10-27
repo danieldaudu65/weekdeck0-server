@@ -78,6 +78,49 @@ Activities → Thank you. **NC = number of new clients**: shown and summed as a
 count, never added to the money total. The month of a week is the month its
 Monday falls in.
 
+## Accounts (/accounts)
+
+A separate section for accountants, at `/accounts`, with its own login (email +
+password). Every accountant signs up with their own region and keeps that
+region's workbook; nobody else can see or change it.
+
+- **Workbook.** The month's payments in the exact columns of their Google
+  Sheets (S/N … COMMENT, A–Z, plus the week 2–4 columns of the New client
+  sheet). The three sheets (Workflow, New clients, Infrastructure & other fees)
+  are switched at the top; the tabs (OGBAFAGBA, OGBAFAGBA VIDCO, ABULE EGBA …)
+  sit at the bottom like Google Sheets. Type, paste blocks from Excel or Sheets,
+  arrows/Tab/Enter, Ctrl/⌘+C, Ctrl/⌘+D fills down, Delete clears. Picking a
+  marketer fills in their supervisor, designation, account and spouse. Rows
+  that look like the same payment twice, or have a date far from the month,
+  are marked ⚠. Everything saves by itself.
+- **Import.** Their own .xlsx files (or Google Sheets downloaded as .xlsx /
+  .csv). Columns are found by header name; formula-only rows are skipped;
+  "NILL", "NEW & FORM" and notes typed into POSTING STATUS are tidied; a check
+  screen shows rows, totals and fixes per tab before anything is saved.
+  Importing the same file again adds only new rows (a payment = date + alert
+  name + amount + client + CABAL ID). New marketers go onto the roster.
+- **Marketers.** The roster (details typed once), branch, team and team head.
+  Teams are linked from WeekDeck (set up by the team heads); close spellings
+  ("ARTHUR NYONG STIM" / "ETIM") are matched and remembered; "Same person?"
+  merges two spellings and moves their payments.
+- **Export.** The month's deck laid out like their September slides, per
+  branch: Cover → Senior staff (team heads) → one slide per team → Others →
+  Branch summary → January–December. Columns: MARKETERS NAME, DESIGNATION,
+  INFLOW (Workflow + New client), INFRAS, TOTAL, NC (new clients). Extra
+  slides: top marketers, pending confirmations, new clients list, commission,
+  inflow by bank, branches vs last month. Tick, reorder and rename slides (all
+  remembered), pick one of the 96 looks, then PowerPoint, PDF or Present.
+  Confirmed payments only by default. Sheets download as .xlsx in their layout
+  (one file per sheet type, chosen tabs) or as CSV rows for Google Sheets'
+  "Append rows to current sheet". "Earlier months" holds totals typed from old
+  slides for the January–December table.
+
+Server: `src/routes/accounts.js`, `src/utils/accounts.js` (rules, unit-tested),
+models `Accountant`, `Payment`, `Marketer`. Browser: `src/pages/accounts/`,
+`src/components/accounts/Grid.tsx`, `src/lib/accounts/` (columns, Excel
+read/write on JSZip, importer, deck builder, name matching; tests in
+`accounts.test.ts`). No new packages.
+
 ## Run it on your computer
 
 Needs Node.js 20+ and a MongoDB database.
@@ -188,6 +231,6 @@ client/   Vite + React + TypeScript + Tailwind
   src/lib/suggest.ts        activity memory and suggestions
   src/pages/                Welcome, Setup (import), Week, Slides, Print, Team
 server/   Node + Express + Mongoose (plain JavaScript)
-  src/routes/               auth, team, weeks (+ history), admin, ai (optional)
-  src/models/               Team, Week
+  src/routes/               auth, team, weeks (+ history), admin, ai (optional), region, accounts
+  src/models/               Team, Week, Region, Accountant, Payment, Marketer
 ```

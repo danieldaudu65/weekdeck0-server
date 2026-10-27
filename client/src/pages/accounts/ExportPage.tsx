@@ -1,0 +1,456 @@
+/**
+ * Export: the month's slides (pick which, put them in order, rename, pick a
+ * look → PowerPoint / PDF / present) and the sheets (pick tabs → Excel, or
+ * rows for Google Sheets).
+ */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreadsheet, History, Pencil, Play, Presentation, Printer, RotateCcw, Sheet } from 'lucide-react';
+import { useAccounts, Panel } from './AccountsApp';
+import { Button, Spinner } from '../../components/ui';
+import { useToast } from '../../components/Toast';
+import { SlideCanvas } from '../../components/SlideCanvas';
+import { LookPicker } from '../../components/LookPicker';
+import { Presenter } from '../../components/Presenter';
+import { layoutSlide } from '../../lib/looks';
+import { lookById } from '../../lib/templates';
+import { accApi } from '../../lib/accounts/api';
+import { applyPrefs, buildAccountsDeck, type DeckPrefs, type HistoryRow, type SummaryCell } from '../../lib/accounts/accDeck';
+import { KINDS, MONTH_NAMES, addMonths, monthName, parseMoney, showMoney, type Kind } from '../../lib/accounts/columns';
+import { exportCsv, exportExcel } from '../../lib/accounts/exporter';
+import { downloadBlob } from '../../lib/accounts/xlsx';
+import { setPrintJob } from '../../lib/accounts/printJob';
+
+export function ExportPage() {
+  const { acc, saveMe, marketers, month, setMonth, ledger } = useAccounts();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const year = month.slice(0, 4);
+  const [summary, setSummary] = useState<SummaryCell[] | null>(null);
+  const [prefs, setPrefs] = useState<DeckPrefs>(acc.deck);
+  const [presenting, setPresenting] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  // Save whatever is waiting first, so the totals include the latest typing.
+  useEffect(() => {
+    let alive = true;
+    setSummary(null);
+    ledger
+      .flush()
+      .then(() => accApi.summary(year))
+      .then((r) => alive && setSummary(r.cells))
+      .catch(() => alive && setSummary([]));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, month]);
+
+  // Remember the choices (a moment after the last change).
+  const saveTimer = useRef<number | undefined>(undefined);
+  const choose = (next: DeckPrefs) => {
+    setPrefs(next);
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveMe({ deck: next }).catch(() => toast('Couldn’t remember your slide choices', 'bad'));
+    }, 700);
+  };
+
+  const items = useMemo(
+    () =>
+      buildAccountsDeck({
+        region: acc.region,
+        month,
+        payments: ledger.rows,
+        marketers,
+        tabs: acc.tabs,
+        summary: summary ?? [],
+        history: acc.history,
+        countAll: prefs.countAll,
+      }),
+    [acc.region, acc.tabs, acc.history, month, ledger.rows, marketers, summary, prefs.countAll],
+  );
+  const list = useMemo(() => applyPrefs(items, prefs), [items, prefs]);
+  const look = useMemo(() => lookById(prefs.lookId), [prefs.lookId]);
+  const chosen = list.filter((x) => x.on).map((x) => x.item.slide);
+  const laidAll = useMemo(() => list.map((x, i) => layoutSlide(x.item.slide, look, { teamName: acc.region, page: i + 1, total: list.length })), [list, look, acc.region]);
+  const laidChosen = useMemo(() => chosen.map((s, i) => layoutSlide(s, look, { teamName: acc.region, page: i + 1, total: chosen.length })), [chosen, look, acc.region]);
+
+  const baseId = (id: string) => id.replace(/#\d+$/, '');
+  const toggle = (id: string, extra: boolean, on: boolean) => {
+    const b = baseId(id);
+    if (extra) choose({ ...prefs, on: on ? prefs.on.filter((x) => x !== b) : [...prefs.on, b] });
+    else choose({ ...prefs, off: on ? [...prefs.off, b] : prefs.off.filter((x) => x !== b) });
+  };
+  const move = (index: number, dir: -1 | 1) => {
+    const ids = list.map((x) => x.item.id);
+    const to = index + dir;
+    if (to < 0 || to >= ids.length) return;
+    [ids[index], ids[to]] = [ids[to], ids[index]];
+    choose({ ...prefs, order: ids });
+  };
+  const rename = (id: string, title: string) => {
+    const others = prefs.titles.filter((t) => t.id !== id);
+    choose({ ...prefs, titles: title.trim() ? [...others, { id, title: title.trim() }] : others });
+    setEditing(null);
+  };
+
+  const fileName = `${acc.region} ${monthName(month)}`.replace(/[^\w .-]+/g, '').trim();
+  const deckTitle = `${acc.region}: ${monthName(month)} performance review`;
+
+  const downloadPptx = async () => {
+    setBusy('pptx');
+    try {
+      const { downloadPptx: dl } = await import('../../lib/exportPptx');
+      await dl(chosen, look, { teamName: acc.region, title: deckTitle, fileName });
+      toast('PowerPoint downloaded');
+    } catch {
+      toast('The PowerPoint couldn’t be made. Try again.', 'bad');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const printPdf = () => {
+    setPrintJob({ slides: chosen, lookId: look.id, title: fileName, teamName: acc.region });
+    navigate('/accounts/print');
+  };
+
+  const loading = ledger.loading || summary === null;
+  let lastGroup = '';
+
+  return (
+    <div className="min-w-0 space-y-8">
+      <section className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-wider text-blue">Export</p>
+          <div className="mt-1 flex items-center gap-2">
+            <button type="button" aria-label="Month before" onClick={() => setMonth(addMonths(month, -1))} className="grid size-10 place-items-center rounded-xl bg-white shadow-sm active:scale-95">
+              <ChevronLeft className="size-5" aria-hidden />
+            </button>
+            <h1 className="min-w-[11ch] text-center text-[26px] font-extrabold leading-tight tracking-tight md:text-3xl">{monthName(month)}</h1>
+            <button type="button" aria-label="Month after" onClick={() => setMonth(addMonths(month, 1))} className="grid size-10 place-items-center rounded-xl bg-white shadow-sm active:scale-95">
+              <ChevronRight className="size-5" aria-hidden />
+            </button>
+          </div>
+          <p className="mt-1 text-muted">Tick the slides you want, put them in order, then download or present.</p>
+        </div>
+        <Button size="lg" icon={<Play className="size-5" aria-hidden />} onClick={() => setPresenting(true)} disabled={loading || !chosen.length}>
+          Present
+        </Button>
+      </section>
+
+      {/* What counts */}
+      <div className="grid gap-2 md:grid-cols-2">
+        {[
+          { all: false, title: 'Confirmed payments only', text: 'Only rows marked CONFIRMED count in the tables (recommended)' },
+          { all: true, title: 'Every payment recorded', text: 'Includes payments still waiting for evidence' },
+        ].map((o) => (
+          <label key={String(o.all)} className={`flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-2 ${prefs.countAll === o.all ? 'ring-blue' : 'ring-transparent'}`}>
+            <input type="radio" name="count" checked={prefs.countAll === o.all} onChange={() => choose({ ...prefs, countAll: o.all })} className="mt-1 size-4 accent-[var(--color-blue)]" />
+            <span>
+              <span className="block font-bold">{o.title}</span>
+              <span className="text-sm text-muted">{o.text}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {/* Slides */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-extrabold">
+            Slides <span className="text-sm font-semibold text-muted">· {chosen.length} of {list.length} ticked</span>
+          </h2>
+          {(prefs.order.length > 0 || prefs.titles.length > 0) && (
+            <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" aria-hidden />} onClick={() => choose({ ...prefs, order: [], titles: [] })}>
+              Standard order and titles
+            </Button>
+          )}
+        </div>
+        {loading ? (
+          <Spinner label="Working out the figures…" />
+        ) : !ledger.rows.length ? (
+          <Panel>
+            <p className="py-6 text-center text-muted">No rows in {monthName(month)} yet. Import or type them in the Workbook first.</p>
+          </Panel>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {list.map(({ item, on }, i) => {
+              const header = item.group !== lastGroup ? item.group : null;
+              lastGroup = item.group;
+              const isEditing = editing === item.id;
+              return (
+                <div key={item.id} className="contents">
+                  {header && <h3 className="col-span-full mt-2 text-sm font-extrabold uppercase tracking-wider text-muted">{header}</h3>}
+                  <div className={`min-w-0 rounded-2xl bg-white p-2 shadow-sm ring-2 transition ${on ? 'ring-blue/70' : 'opacity-55 ring-transparent'}`}>
+                    <button type="button" onClick={() => toggle(item.id, item.extra, on)} className="block w-full overflow-hidden rounded-xl ring-1 ring-ink/5" aria-pressed={on} aria-label={`${on ? 'Leave out' : 'Include'} ${item.label}`}>
+                      <SlideCanvas bg={laidAll[i].bg} shapes={laidAll[i].shapes} label={item.label} />
+                    </button>
+                    <div className="flex items-center gap-1 px-1 pt-2">
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                        <input type="checkbox" checked={on} onChange={() => toggle(item.id, item.extra, on)} className="size-4 shrink-0 accent-[var(--color-blue)]" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-extrabold">{item.label}</span>
+                          {item.extra && <span className="text-[11px] font-bold uppercase text-blue">Extra</span>}
+                        </span>
+                      </label>
+                      <IconBtn label="Rename" onClick={() => setEditing(isEditing ? null : item.id)}>
+                        <Pencil className="size-4" aria-hidden />
+                      </IconBtn>
+                      <IconBtn label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
+                        <ArrowUp className="size-4" aria-hidden />
+                      </IconBtn>
+                      <IconBtn label="Move down" onClick={() => move(i, 1)} disabled={i === list.length - 1}>
+                        <ArrowDown className="size-4" aria-hidden />
+                      </IconBtn>
+                    </div>
+                    {isEditing && (
+                      <form
+                        className="flex gap-2 px-1 pt-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          rename(item.id, String(new FormData(e.currentTarget).get('t') || ''));
+                        }}
+                      >
+                        <input name="t" autoFocus defaultValue={item.slide.title} className="h-10 min-w-0 flex-1 rounded-xl border border-line px-3 text-sm" aria-label="Slide title" />
+                        <Button size="sm" type="submit">
+                          Save
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Look */}
+      <section>
+        <h2 className="mb-3 text-xl font-extrabold">
+          Pick a look <span className="text-sm font-semibold text-muted">· 96 to choose from</span>
+        </h2>
+        <LookPicker look={look} cover={list.find((x) => x.item.slide.kind === 'cover')?.item.slide} onChange={(id) => choose({ ...prefs, lookId: id })} />
+      </section>
+
+      {/* Slide actions */}
+      {!loading && chosen.length > 0 && (
+        <div className="sticky bottom-20 z-20 grid grid-cols-3 gap-2 rounded-3xl bg-ink p-2 shadow-[0_18px_40px_-16px_rgba(14,26,43,0.8)] md:bottom-6">
+          <Button size="lg" icon={<Presentation className="size-5" aria-hidden />} loading={busy === 'pptx'} onClick={downloadPptx} disabled={busy !== null}>
+            <span className="hidden sm:inline">PowerPoint</span>
+            <span className="sm:hidden">PPTX</span>
+          </Button>
+          <Button variant="dark" size="lg" className="bg-white/10" icon={<Printer className="size-5" aria-hidden />} onClick={printPdf} disabled={busy !== null}>
+            PDF
+          </Button>
+          <Button variant="dark" size="lg" className="bg-white/10" icon={<Play className="size-5" aria-hidden />} onClick={() => setPresenting(true)} disabled={busy !== null}>
+            Present
+          </Button>
+        </div>
+      )}
+
+      <SheetsExport />
+      <EarlierMonths summary={summary ?? []} />
+
+      {presenting && <Presenter slides={laidChosen} title={deckTitle} onExit={() => setPresenting(false)} />}
+    </div>
+  );
+}
+
+function IconBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
+  return (
+    <button type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled} className="grid size-9 shrink-0 place-items-center rounded-xl text-muted hover:bg-paper hover:text-ink disabled:opacity-30">
+      {children}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ sheets */
+
+function SheetsExport() {
+  const { acc, month, ledger } = useAccounts();
+  const toast = useToast();
+  const tabs = useMemo(() => [...new Set([...acc.tabs.map((t) => t.name), ...ledger.rows.map((p) => p.tab)])], [acc.tabs, ledger.rows]);
+  const [kinds, setKinds] = useState<Kind[]>(['land', 'new', 'infra']);
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const chosenTabs = picked ?? tabs;
+  const count = (k: Kind, t: string) => ledger.rows.filter((p) => p.kind === k && p.tab === t).length;
+  const rows = kinds.reduce((a, k) => a + chosenTabs.reduce((b, t) => b + count(k, t), 0), 0);
+
+  const flip = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+  const run = async (what: 'xlsx' | 'csv') => {
+    try {
+      await ledger.flush();
+      const choice = { month, kinds, tabs: chosenTabs };
+      const f = what === 'xlsx' ? await exportExcel(ledger.rows, choice) : await exportCsv(ledger.rows, choice);
+      downloadBlob(f.blob, f.name);
+      toast(`${f.name} downloaded`);
+    } catch {
+      toast('Couldn’t make the file. Try again.', 'bad');
+    }
+  };
+
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <Sheet className="size-5 text-ok" aria-hidden /> Download the sheets
+        </span>
+      }
+    >
+      <p className="mb-4 text-sm text-muted">Same columns and layout as your Google Sheets. Pick the sheets and tabs you want.</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <fieldset>
+          <legend className="mb-2 text-sm font-extrabold">Sheets</legend>
+          <div className="flex flex-wrap gap-2">
+            {KINDS.map((k) => (
+              <Chip key={k.id} on={kinds.includes(k.id)} onClick={() => setKinds(flip(kinds, k.id))}>
+                {k.label}
+              </Chip>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="mb-2 text-sm font-extrabold">Tabs</legend>
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((t) => (
+              <Chip key={t} on={chosenTabs.includes(t)} onClick={() => setPicked(flip(chosenTabs, t))}>
+                {t}
+              </Chip>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <Button icon={<FileSpreadsheet className="size-4" aria-hidden />} onClick={() => run('xlsx')} disabled={!kinds.length || !chosenTabs.length}>
+          Excel (.xlsx)
+        </Button>
+        <Button variant="soft" icon={<Sheet className="size-4" aria-hidden />} onClick={() => run('csv')} disabled={!kinds.length || !chosenTabs.length}>
+          Rows to add to Google Sheets (.csv)
+        </Button>
+        <span className="text-sm font-semibold text-muted">
+          {rows} row{rows === 1 ? '' : 's'}
+          {kinds.length > 1 || (kinds.length && chosenTabs.length > 1) ? ' · several files come in one .zip' : ''}
+        </span>
+      </div>
+      <details className="mt-4 rounded-2xl bg-paper px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-bold">How to put these into Google Sheets</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+          <li>
+            <b>Excel (.xlsx)</b>: in Google Sheets choose File → Import → Upload, then “Insert new sheet(s)”. In Excel just open it.
+          </li>
+          <li>
+            <b>Rows to add (.csv)</b>: rows only, no headers, one file per tab. Open the right tab of your sheet, choose File → Import → Upload, then “Append rows to current sheet”. The rows go under your last row, column for column.
+          </li>
+          <li>The columns are in the same order as your sheet (S/N, BRANCH, DATE …). Don’t move columns in your sheet, or the rows will land in the wrong place.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick} className={`h-10 rounded-xl px-3.5 text-sm font-bold transition ${on ? 'bg-ink text-white' : 'bg-paper text-muted hover:text-ink'}`}>
+      {children}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ earlier months */
+
+/** Figures for months before WeekDeck (from last year's slides), for the January – December slide. */
+function EarlierMonths({ summary }: { summary: SummaryCell[] }) {
+  const { acc, saveMe, month } = useAccounts();
+  const toast = useToast();
+  const year = month.slice(0, 4);
+  const branches = useMemo(() => [...new Set([...acc.tabs.map((t) => (t.branch || t.name).toUpperCase()), ...acc.history.map((h) => h.branch)])].filter(Boolean), [acc.tabs, acc.history]);
+  const [rows, setRows] = useState<HistoryRow[]>(acc.history);
+  useEffect(() => setRows(acc.history), [acc.history]);
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+
+  const get = (branch: string, m: string) => rows.find((h) => h.branch === branch && h.month === m);
+  const set = (branch: string, m: string, field: 'land' | 'infra' | 'nc', raw: string) => {
+    const n = raw.trim() === '' ? null : parseMoney(raw);
+    if (Number.isNaN(n)) return toast('Type a number, e.g. 41,285,745.83', 'bad');
+    const cur = get(branch, m) ?? { branch, month: m, land: null, infra: null, nc: null };
+    const next = rows.filter((h) => !(h.branch === branch && h.month === m));
+    const row = { ...cur, [field]: field === 'nc' && n !== null ? Math.round(n) : n };
+    const all = row.land === null && row.infra === null && row.nc === null ? next : [...next, row];
+    setRows(all);
+    saveMe({ history: all }).catch(() => toast('Couldn’t save. Try again.', 'bad'));
+  };
+
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <History className="size-5 text-blue" aria-hidden /> Earlier months
+        </span>
+      }
+    >
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold text-muted">
+          For the January – December slide: type the totals of months before you started using WeekDeck (from your old slides). Months with rows in the workbook are filled in already.
+        </summary>
+        <div className="mt-4 space-y-6">
+          {branches.map((b) => (
+            <div key={b} className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+              <p className="mb-2 font-extrabold">{b}</p>
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted">
+                    <th className="py-1 font-bold">Month</th>
+                    <th className="py-1 font-bold">Land &amp; building</th>
+                    <th className="py-1 font-bold">Infra &amp; other fees</th>
+                    <th className="py-1 font-bold">NC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {months.map((m, i) => {
+                    const fromBook = summary.find((c) => c.month === m && c.branch === b);
+                    const h = get(b, m);
+                    return (
+                      <tr key={m} className="border-t border-line">
+                        <td className="py-1.5 font-bold">{MONTH_NAMES[i]}</td>
+                        {fromBook && (fromBook.all.land || fromBook.all.infra) ? (
+                          <td colSpan={3} className="py-1.5 text-muted">
+                            <Eye className="mr-1 inline size-4" aria-hidden /> From the workbook: ₦{showMoney(fromBook.confirmed.land + fromBook.confirmed.infra)} confirmed
+                          </td>
+                        ) : m >= month ? (
+                          <td colSpan={3} className="py-1.5 text-muted/70">
+                            <EyeOff className="mr-1 inline size-4" aria-hidden /> Not yet
+                          </td>
+                        ) : (
+                          (['land', 'infra', 'nc'] as const).map((f) => (
+                            <td key={f} className="py-1 pr-2">
+                              <input
+                                defaultValue={h?.[f] === null || h?.[f] === undefined ? '' : f === 'nc' ? String(h[f]) : showMoney(h[f])}
+                                onBlur={(e) => {
+                                  const old = h?.[f] ?? null;
+                                  const now = e.target.value.trim() === '' ? null : parseMoney(e.target.value);
+                                  if (now !== old) set(b, m, f, e.target.value);
+                                }}
+                                inputMode="decimal"
+                                placeholder="—"
+                                className="figures h-9 w-full rounded-lg border border-line px-2 text-right"
+                                aria-label={`${b} ${MONTH_NAMES[i]} ${f}`}
+                              />
+                            </td>
+                          ))
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      </details>
+    </Panel>
+  );
+}

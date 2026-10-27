@@ -3,6 +3,7 @@
 const mongoose = require('mongoose');
 const Team = require('../models/Team');
 const Region = require('../models/Region');
+const Accountant = require('../models/Accountant');
 const { verifyToken } = require('../utils/tokens');
 
 function unauthorized(res) {
@@ -20,7 +21,7 @@ async function load(req, kind) {
     return null;
   }
   if (payload.k !== kind || !mongoose.isValidObjectId(payload.sub)) return null;
-  const Model = kind === 't' ? Team : Region;
+  const Model = kind === 't' ? Team : kind === 'a' ? Accountant : Region;
   const doc = await Model.findById(payload.sub);
   if (!doc || (doc.tokenVersion || 0) !== payload.v) return null;
   return doc;
@@ -50,6 +51,18 @@ async function requireRegion(req, res, next) {
   }
 }
 
+/** A logged-in accountant (their own region's workbook only). */
+async function requireAccountant(req, res, next) {
+  try {
+    const accountant = await load(req, 'a');
+    if (!accountant) return unauthorized(res);
+    req.accountant = accountant;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** Either a team or a region head (for shared helpers like map tiles). */
 async function requireAnyAccount(req, res, next) {
   try {
@@ -70,4 +83,4 @@ async function requireAnyAccount(req, res, next) {
   }
 }
 
-module.exports = { requireTeam, requireRegion, requireAnyAccount };
+module.exports = { requireTeam, requireRegion, requireAccountant, requireAnyAccount };

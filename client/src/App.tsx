@@ -15,6 +15,7 @@ import { PreviewPage } from './pages/PreviewPage';
 import { takeAfterLogin } from './lib/afterLogin';
 import { RegionPage } from './pages/RegionPage';
 import { RegionPresentPage } from './pages/RegionPresentPage';
+import { AccountsApp } from './pages/accounts/AccountsApp';
 
 /** Signed-in only. A team without members goes to setup first. */
 function RequireTeam() {
@@ -57,6 +58,8 @@ export default function App() {
               {/* Region heads have their own login, separate from teams. */}
               <Route path="/region" element={<RegionPage />} />
               <Route path="/region/present/:teamId" element={<RegionPresentPage />} />
+              {/* Accountants have their own login too: one workbook per accountant and region. */}
+              <Route path="/accounts/*" element={<AccountsApp />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

@@ -127,7 +127,9 @@ interface TableColours {
 function table(slide: Kind<'table'>, a: Area, c: TableColours): S[] {
   const { head, rows, total } = slide.table;
   const cols = head.length;
-  const nameW = Math.min(240, Math.max(150, Math.round(a.w * 0.19)));
+  // Wide enough for full names ("OLORUNSOGO OPEOLUWA SAMUEL" on accountants' slides), never more than a third.
+  const longestName = Math.max(0, ...[...rows, total].map((r) => (r[0] ?? '').length));
+  const nameW = Math.max(Math.min(240, Math.max(150, Math.round(a.w * 0.19))), Math.min(Math.round(a.w * 0.36), longestName * 12 + 36));
   const other = (a.w - nameW) / (cols - 1);
   const rowH = Math.max(26, Math.min(56, Math.floor(a.h / (rows.length + 2))));
   const longest = Math.max(4, ...[...rows, total].flatMap((r) => r.slice(1).map((x) => x.length)), ...head.slice(1).map((x) => x.length));
@@ -447,7 +449,7 @@ const classic: StyleImpl = {
     const tw = img ? 620 : 760;
     const shapes: S[] = img ? [{ type: 'image', x: 0, y: 0, w: 520, h: 720, src: s.image }] : motif(900, 230, 3.4, t.accent, mix(t.coverBg, 'FFFFFF', 0.25));
     shapes.push(
-      T(tx, 120, tw, 32, 'WEEKLY REPORT', 18, coverPop(t), { bold: true, spacing: 3 }),
+      T(tx, 120, tw, 32, s.kicker ?? 'WEEKLY REPORT', 18, coverPop(t), { bold: true, spacing: 3 }),
       T(tx, 160, tw, 250, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 250, img ? 52 : 60, 28), t.coverInk, { bold: true, valign: 'top' }),
       R(tx, 430, 380, 48, t.accent, 24),
       T(tx, 430, 380, 48, s.week, fit(s.week, 350, 48, 19), t.accentInk, { bold: true, align: 'center' }),
@@ -497,7 +499,7 @@ const corporate: StyleImpl = {
         R(0, 0, 1280, 470, t.coverBg),
         ...(img ? [{ type: 'image', x: 800, y: 0, w: 480, h: 470, src: s.image } as S] : [R(1040, 0, 240, 470, mix(t.coverBg, 'FFFFFF', 0.12))]),
         R(0, 470, 1280, 12, t.accent),
-        T(80, 74, tw, 30, 'WEEKLY REPORT', 18, coverPop(t), { bold: true, spacing: 3 }),
+        T(80, 74, tw, 30, s.kicker ?? 'WEEKLY REPORT', 18, coverPop(t), { bold: true, spacing: 3 }),
         T(80, 116, tw, 300, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 300, 60, 28), t.coverInk, { bold: true, valign: 'top' }),
         T(80, 520, 700, 46, s.name.toUpperCase(), fit(s.name.toUpperCase(), 700, 46, 32), t.ink, { bold: true }),
         T(80, 568, 700, 30, s.role.toUpperCase(), 18, t.muted, { spacing: 1 }),
@@ -600,7 +602,7 @@ const minimal: StyleImpl = {
       shapes: [
         ...(img ? [{ type: 'image', x: 720, y: 0, w: 560, h: 720, src: s.image } as S] : []),
         R(80, 90, 26, 26, t.accent),
-        T(122, 90, 500, 26, 'WEEKLY REPORT', 15, t.muted, { bold: true, spacing: 3 }),
+        T(122, 90, 500, 26, s.kicker ?? 'WEEKLY REPORT', 15, t.muted, { bold: true, spacing: 3 }),
         T(80, 170, tw, 260, s.title, fit(s.title, tw, 260, 72, 30), t.ink, { valign: 'top' }),
         R(80, 470, 80, 4, t.highlight),
         T(80, 500, tw, 40, s.name, fit(s.name, tw, 40, 28), t.ink, { bold: true }),
@@ -645,11 +647,11 @@ const editorial: StyleImpl = {
       shapes: [
         R(80, 60, 1120, 3, t.coverInk),
         R(80, 68, 1120, 1, t.coverInk),
-        T(80, 76, 600, 30, 'THE WEEKLY REPORT', 14, t.coverMuted, { bold: true, spacing: 3 }),
+        T(80, 76, 600, 30, s.kicker ? `THE ${s.kicker}` : 'THE WEEKLY REPORT', 14, t.coverMuted, { bold: true, spacing: 3 }),
         T(680, 76, 520, 30, s.range, 15, t.coverMuted, { align: 'right', italic: true, font: 'serif' }),
         ...(img ? [R(744, 140, 456, 496, t.accent), { type: 'image', x: 760, y: 156, w: 424, h: 464, src: s.image } as S] : []),
         T(80, 150, tw, 320, s.title, fit(s.title, tw, 320, 84, 32, 'serif'), t.coverInk, { font: 'serif', bold: true, valign: 'top' }),
-        T(80, 490, tw, 40, `Week ${s.weekNo}`, 28, coverPop(t), { font: 'serif', italic: true }),
+        T(80, 490, tw, 40, s.badge ?? `Week ${s.weekNo}`, 28, coverPop(t), { font: 'serif', italic: true }),
         R(80, 552, 120, 2, coverPop(t)),
         T(80, 570, tw, 40, s.name, fit(s.name, tw, 40, 26), t.coverInk, { bold: true }),
         T(80, 610, tw, 30, s.role, 17, t.coverMuted, { italic: true, font: 'serif' }),
@@ -718,7 +720,7 @@ function glowCover(s: Kind<'cover'>, t: Theme): Laid {
       ...glow(180, 760, 300, g.base, g.second, 0.4),
       ...(img ? [{ type: 'image', x: 760, y: 120, w: 440, h: 480, src: s.image } as S] : []),
       R(80, 120, 220, 40, g.card, 20),
-      T(80, 120, 220, 40, 'WEEKLY REPORT', 14, g.light, { bold: true, align: 'center', spacing: 2 }),
+      T(80, 120, 220, 40, s.kicker ?? 'WEEKLY REPORT', 14, g.light, { bold: true, align: 'center', spacing: 2 }),
       T(80, 190, tw, 260, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 260, 62, 28), g.ink, { bold: true, valign: 'top' }),
       T(80, 470, tw, 40, s.week, 22, g.light, { bold: true }),
       T(80, 540, tw, 44, s.name.toUpperCase(), 28, g.ink, { bold: true }),
@@ -787,7 +789,7 @@ const playful: StyleImpl = {
         ...(img ? [{ type: 'image', x: 800, y: 150, w: 400, h: 400, src: s.image } as S, O(1110, 470, 130, t.accent)] : [O(980, 260, 200, t.accent)]),
         O(img ? 760 : 920, 120, 56, t.accent),
         R(80, 120, 250, 50, t.accent, 25),
-        T(80, 120, 250, 50, `WEEK ${s.weekNo}`, 22, t.accentInk, { bold: true, align: 'center' }),
+        T(80, 120, 250, 50, s.badge?.toUpperCase() ?? `WEEK ${s.weekNo}`, 22, t.accentInk, { bold: true, align: 'center' }),
         T(80, 200, img ? 660 : 820, 260, s.title, fit(s.title, img ? 660 : 820, 260, 64, 28), t.coverInk, { bold: true, valign: 'top' }),
         T(80, 490, 660, 44, s.name, 30, t.coverInk, { bold: true }),
         T(80, 534, 660, 30, s.role, 19, t.coverMuted),
@@ -845,11 +847,11 @@ const dashboard: StyleImpl = {
         R(56, 56, 20, 608, t.primary, 0),
         ...(img ? [{ type: 'image', x: 800, y: 96, w: 384, h: 528, src: s.image } as S] : [R(800, 96, 384, 528, t.primary, 22), ...motif(880, 290, 2.8, t.accent, mix(t.primary, 'FFFFFF', 0.25))]),
         R(120, 110, 200, 40, t.surface, 20),
-        T(120, 110, 200, 40, 'WEEKLY REPORT', 13, t.highlight, { bold: true, align: 'center', spacing: 1.5 }),
+        T(120, 110, 200, 40, s.kicker ?? 'WEEKLY REPORT', 13, t.highlight, { bold: true, align: 'center', spacing: 1.5 }),
         T(120, 180, 640, 240, s.title, fit(s.title, 640, 240, 56, 26), t.ink, { bold: true, valign: 'top' }),
         R(120, 452, 300, 86, t.surface, 18),
-        T(140, 460, 260, 26, 'WEEK', 13, t.muted, { bold: true, spacing: 1.5 }),
-        T(140, 486, 260, 40, String(s.weekNo), 32, t.highlight, { bold: true }),
+        T(140, 460, 260, 26, s.badge ? 'MONTH' : 'WEEK', 13, t.muted, { bold: true, spacing: 1.5 }),
+        T(140, 486, 260, 40, s.badge ?? String(s.weekNo), s.badge ? fit(s.badge, 260, 40, 32) : 32, t.highlight, { bold: true }),
         R(440, 452, 320, 86, t.surface, 18),
         T(460, 460, 280, 26, 'DATES', 13, t.muted, { bold: true, spacing: 1.5 }),
         T(460, 486, 280, 40, s.range, fit(s.range, 280, 40, 22), t.ink, { bold: true }),

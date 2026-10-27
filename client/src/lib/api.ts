@@ -36,8 +36,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  // A caller may bring its own login (the region head's); otherwise the team's is used.
-  const ownAuth = headers.has('Authorization');
+  // A caller may bring its own login (the region head's, an accountant's); otherwise the team's is used.
+  // "X-Own-Auth" = this call belongs to another login even when it has no token yet (logging in).
+  const ownAuth = headers.has('Authorization') || headers.has('X-Own-Auth');
+  headers.delete('X-Own-Auth');
   const token = ownAuth ? null : getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 

@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const { env } = require('../config/env');
 
 /**
- * Login tokens. `k` says who it's for ("t" team, "r" region head) so one can
+ * Login tokens. `k` says who it's for ("t" team, "r" region head, "a" accountant) so one can
  * never be used as the other. `v` must match the account's tokenVersion
  * (bumped on PIN change, which logs out every other device).
  */
@@ -17,6 +17,7 @@ function sign(kind, doc) {
 
 const signTeamToken = (team) => sign('t', team);
 const signRegionToken = (region) => sign('r', region);
+const signAccountantToken = (accountant) => sign('a', accountant);
 
 function verifyToken(token) {
   const p = jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] });
@@ -26,4 +27,4 @@ function verifyToken(token) {
 /** Kept for older imports: verifies and returns the payload (team or region). */
 const verifyTeamToken = verifyToken;
 
-module.exports = { signTeamToken, signRegionToken, verifyToken, verifyTeamToken };
+module.exports = { signTeamToken, signRegionToken, signAccountantToken, verifyToken, verifyTeamToken };

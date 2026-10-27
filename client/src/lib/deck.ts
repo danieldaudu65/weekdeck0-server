@@ -21,7 +21,21 @@ export interface DeckTable {
 }
 
 export type DeckSlide =
-  | { kind: 'cover'; title: string; week: string; weekNo: number; range: string; team: string; name: string; role: string; image: string }
+  | {
+      kind: 'cover';
+      title: string;
+      week: string;
+      weekNo: number;
+      range: string;
+      team: string;
+      name: string;
+      role: string;
+      image: string;
+      /** Small label above the title. Default "WEEKLY REPORT" (accountants' decks: "PERFORMANCE REVIEW"). */
+      kicker?: string;
+      /** Replaces "Week 2" where a style writes it out (accountants' decks: the month). */
+      badge?: string;
+    }
   | { kind: 'summary'; title: string; stats: { label: string; value: string; sub: string }[]; bars: { name: string; value: number; label: string }[]; note: string }
   | { kind: 'team'; title: string; members: { name: string; lead: boolean }[] }
   | { kind: 'table'; title: string; subtitle: string; table: DeckTable }

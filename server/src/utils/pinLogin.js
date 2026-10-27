@@ -8,10 +8,10 @@ const LOCK_MINUTES = 15;
 const DUMMY_HASH = bcrypt.hashSync('000000', 10);
 
 /**
- * Checks a PIN for a team or region account with lockout: 5 wrong PINs lock
- * it for 15 minutes. Returns { ok } or { locked: minutes } or { ok: false }.
+ * Checks a PIN (or an accountant's password, field "passwordHash") with
+ * lockout: 5 wrong tries lock the account for 15 minutes. Returns { ok } or { locked: minutes } or { ok: false }.
  */
-async function checkPin(doc, pin) {
+async function checkPin(doc, pin, field = 'pinHash') {
   if (!doc) {
     await bcrypt.compare(pin, DUMMY_HASH);
     return { ok: false };
@@ -19,7 +19,7 @@ async function checkPin(doc, pin) {
   if (doc.lockUntil && doc.lockUntil.getTime() > Date.now()) {
     return { ok: false, locked: Math.ceil((doc.lockUntil.getTime() - Date.now()) / 60000) };
   }
-  if (!(await bcrypt.compare(pin, doc.pinHash))) {
+  if (!(await bcrypt.compare(pin, doc[field]))) {
     doc.failedLogins = (doc.failedLogins || 0) + 1;
     if (doc.failedLogins >= MAX_FAILS) {
       doc.failedLogins = 0;

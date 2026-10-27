@@ -10,7 +10,9 @@ function errorHandler(err, req, res, _next) {
     return res.status(400).json({ error: { code: 'bad_json', message: 'Invalid request.' } });
   }
   if (err && err.code === 11000) {
-    return res.status(409).json({ error: { code: 'conflict', message: 'That team name is already taken.' } });
+    const key = Object.keys((err && err.keyPattern) || {}).join(',');
+    const message = /^key$|accountant,key/.test(key) ? 'Two marketers can’t have the same name. Merge them instead.' : /emailKey/.test(key) ? 'That email already has an account.' : 'That team name is already taken.';
+    return res.status(409).json({ error: { code: 'conflict', message } });
   }
   const status = err && err.expose && err.status ? err.status : 500;
   if (status >= 500) console.error('[weekdeck] error', req.method, req.path, err && err.message);

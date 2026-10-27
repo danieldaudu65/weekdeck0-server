@@ -14,6 +14,7 @@ const aiRoutes = require('./routes/ai');
 const photoRoutes = require('./routes/photos');
 const placeRoutes = require('./routes/places');
 const regionRoutes = require('./routes/region');
+const accountsRoutes = require('./routes/accounts');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -35,6 +36,8 @@ function createApp() {
   );
   // The team route can carry a small cover photo; everything else is tiny.
   app.use('/api/team', express.json({ limit: '800kb' }));
+  // Accountants save and import many sheet rows at once.
+  app.use('/api/accounts', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: 'draft-7', legacyHeaders: false }));
 
@@ -49,6 +52,7 @@ function createApp() {
   app.use('/api/photos', photoRoutes);
   app.use('/api/places', placeRoutes);
   app.use('/api/region', regionRoutes);
+  app.use('/api/accounts', accountsRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
