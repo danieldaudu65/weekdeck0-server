@@ -36,7 +36,8 @@ function createApp() {
   );
   // The team route can carry a small cover photo; everything else is tiny.
   app.use('/api/team', express.json({ limit: '800kb' }));
-  // Accountants save and import many sheet rows at once.
+  // Accountants save and import many sheet rows at once; uploaded slides can include pictures.
+  app.use('/api/accounts/imported', express.json({ limit: '15mb' }));
   app.use('/api/accounts', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: 'draft-7', legacyHeaders: false }));

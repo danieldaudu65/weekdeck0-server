@@ -114,12 +114,27 @@ region's workbook; nobody else can see or change it.
   (one file per sheet type, chosen tabs) or as CSV rows for Google Sheets'
   "Append rows to current sheet". "Earlier months" holds totals typed from old
   slides for the January–December table.
+- **Import slides.** Upload slides the accountant already has: PowerPoint
+  (.pptx/.ppsx/.potx), PDF (also Google Slides downloads), LibreOffice (.odp),
+  Word (.docx, each table a slide), Excel/CSV (each sheet a slide), or photos and
+  screenshots (picture slides; scanned PDFs too). Several files at once. Old
+  .ppt/.doc/.xls and Keynote get a message on how to save them as .pptx/PDF. Before
+  anything is saved WeekDeck checks every slide: each row adds up (INFLOW +
+  INFRAS = TOTAL), each TOTAL row equals the rows above it, numbers written
+  wrongly ("11,810,00.00"), names against the roster and across slides
+  ("ARTHUR NYONG STIM" → "ETIM"), title typos ("CORPERATE"), the month, and,
+  when that month is in the workbook, each person's figures. Every fix is
+  listed and can be unticked. The deck can also fill "Earlier months" from its
+  January–December table and set teams and senior staff on the roster from
+  its team slides. Uploaded slides are saved with the month, sit next to
+  WeekDeck's own slides, can be edited (title, cells, rows, Recalculate) and
+  take any of the 96 looks.
 
 Server: `src/routes/accounts.js`, `src/utils/accounts.js` (rules, unit-tested),
-models `Accountant`, `Payment`, `Marketer`. Browser: `src/pages/accounts/`,
+models `Accountant`, `Payment`, `Marketer`, `ImportedDeck`. Browser: `src/pages/accounts/`,
 `src/components/accounts/Grid.tsx`, `src/lib/accounts/` (columns, Excel
-read/write on JSZip, importer, deck builder, name matching; tests in
-`accounts.test.ts`). No new packages.
+read/write on JSZip, importer, deck builder, name matching, slide import and
+checks; tests in `accounts.test.ts` and `slides.test.ts`). No new packages.
 
 ## Run it on your computer
 
@@ -232,5 +247,5 @@ client/   Vite + React + TypeScript + Tailwind
   src/pages/                Welcome, Setup (import), Week, Slides, Print, Team
 server/   Node + Express + Mongoose (plain JavaScript)
   src/routes/               auth, team, weeks (+ history), admin, ai (optional), region, accounts
-  src/models/               Team, Week, Region, Accountant, Payment, Marketer
+  src/models/               Team, Week, Region, Accountant, Payment, Marketer, ImportedDeck
 ```

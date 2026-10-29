@@ -948,8 +948,8 @@ export function layoutSlide(slide: DeckSlide, lookOrId: Look | string | Theme, c
   const t = look.palette;
   if (slide.kind === 'cover') return st.cover(slide, t);
   if (slide.kind === 'thanks') return st.thanks(slide, t);
-  const subtitle = slide.kind === 'table' || slide.kind === 'activities' || slide.kind === 'map' ? slide.subtitle : '';
-  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind === 'map' ? 'activities' : slide.kind);
+  const subtitle = slide.kind === 'table' || slide.kind === 'activities' || slide.kind === 'map' || slide.kind === 'picture' ? slide.subtitle : '';
+  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind === 'map' || slide.kind === 'picture' ? 'activities' : slide.kind);
   const ink = inkFor(look.style.id, t);
   let content: S[];
   switch (slide.kind) {
@@ -973,6 +973,15 @@ export function layoutSlide(slide: DeckSlide, lookOrId: Look | string | Theme, c
     case 'map':
       content = mapContent(slide, f.area, ink, look.style.id);
       break;
+    case 'picture': {
+      // As big as fits, keeping its shape, centred.
+      const a = f.area;
+      const r = slide.ratio > 0 ? slide.ratio : 16 / 9;
+      const w = Math.min(a.w, a.h * r);
+      const h = w / r;
+      content = [{ type: 'image', x: a.x + (a.w - w) / 2, y: a.y + (a.h - h) / 2, w, h, src: slide.image }];
+      break;
+    }
     case 'team':
       content = st.team(slide, f.area, t);
       break;

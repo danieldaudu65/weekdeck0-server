@@ -115,7 +115,7 @@ export function MarketersPage() {
         <div>
           <p className="text-sm font-bold uppercase tracking-wider text-blue">Marketers</p>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight md:text-3xl">Your roster</h1>
-          <p className="text-muted">Details typed once here fill every payment row. Teams decide which slide each marketer is on.</p>
+          <p className="text-muted">Details typed once here fill every payment row. Teams decide which slide each marketer is on; senior staff also get the Senior staff slide.</p>
         </div>
         <Button icon={<Plus className="size-4" aria-hidden />} onClick={addOne}>
           Add marketer
@@ -204,7 +204,7 @@ export function MarketersPage() {
             <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-muted">
-                  {['Name', 'Designation', 'Branch', 'Team', 'Team head', 'Supervisor', 'Account no.', 'Spouse', 'Spouse account', ''].map((h) => (
+                  {['Name', 'Designation', 'Branch', 'Team', 'Senior staff', 'Supervisor', 'Account no.', 'Spouse', 'Spouse account', ''].map((h) => (
                     <th key={h} className="px-1 py-2 font-bold">
                       {h}
                     </th>
@@ -232,9 +232,10 @@ export function MarketersPage() {
                         type="button"
                         onClick={() => change(m, { lead: !m.lead })}
                         aria-pressed={m.lead}
+                        title="On the Senior staff slide, and first on their team’s slide"
                         className={`inline-flex h-9 items-center gap-1 rounded-xl px-2.5 text-xs font-extrabold ${m.lead ? 'bg-sun-soft text-[#7a4f00]' : 'text-muted hover:bg-paper'}`}
                       >
-                        <Crown className="size-4" aria-hidden /> {m.lead ? 'Head' : 'No'}
+                        <Crown className="size-4" aria-hidden /> {m.lead ? 'Senior' : 'No'}
                       </button>
                     </td>
                     <td className="px-1 py-1.5">

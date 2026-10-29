@@ -149,3 +149,55 @@ function toImageData(img: PdfImage): ImageData {
   }
   return out;
 }
+
+/**
+ * Every page of a PDF as text and tables (accountants' slide import), plus a
+ * way to draw a page as a picture (for scanned PDFs, which have no text).
+ */
+export async function readPdfPages(
+  file: File,
+  maxPages = 60,
+): Promise<{ pages: SlideContent[]; pieces: PdfTextPiece[][]; letters: number; total: number; picture: (n: number) => Promise<{ image: string; ratio: number }>; close: () => void }> {
+  if (file.size > 60 * 1024 * 1024) throw new ImportError('That PDF is over 60 MB. Try saving it again with smaller pictures.');
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  let doc: pdfjs.PDFDocumentProxy;
+  try {
+    doc = await task.promise;
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'PasswordException') throw new ImportError('This PDF is locked with a password. Save a copy without the password and upload that.');
+    throw new ImportError("This PDF couldn't be opened. Make sure it's a real PDF file.");
+  }
+  const pages: SlideContent[] = [];
+  const allPieces: PdfTextPiece[][] = [];
+  let letters = 0;
+  const count = Math.min(doc.numPages, maxPages);
+  for (let n = 1; n <= count; n++) {
+    const page = await doc.getPage(n);
+    const { height } = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const pieces: PdfTextPiece[] = [];
+    for (const item of content.items) {
+      if (!('str' in item) || !item.str) continue;
+      const [a, b, c, d, e, f] = item.transform as number[];
+      pieces.push({ str: item.str, x: e, y: f, w: item.width, size: item.height || Math.hypot(c, d) || Math.hypot(a, b) });
+      letters += item.str.trim().length;
+    }
+    pages.push(pageToSlide(pieces, height, n));
+    allPieces.push(pieces);
+  }
+  const picture = async (n: number) => {
+    const page = await doc.getPage(n);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(3, 1600 / base.width) });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // pdf.js 4 takes canvasContext; newer versions also take the canvas itself.
+    await page.render({ canvasContext: ctx, viewport, canvas } as unknown as Parameters<typeof page.render>[0]).promise;
+    return { image: canvas.toDataURL('image/jpeg', 0.78), ratio: canvas.width / canvas.height };
+  };
+  return { pages, pieces: allPieces, letters, total: doc.numPages, picture, close: () => void task.destroy() };
+}

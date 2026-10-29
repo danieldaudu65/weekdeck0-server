@@ -228,12 +228,13 @@ export function buildAccountsDeck(input: DeckInput): DeckItem[] {
       items.push(...tableSlides(`team:${branch}:${team}`, branch, team, `${team.toUpperCase()} INFLOW AND NEW CLIENTS FOR ${label}`, '', { head: TABLE_HEAD, ...t }));
     }
 
-    // Others: not on a team, plus anyone with payments here who isn't on one of this branch's teams.
+    // Others: no team. Senior staff without a team are on the Senior staff slide only (like their decks).
     const others = new Map<string, Person>();
-    for (const m of inBranch) if (!m.team) others.set(nameKey(m.name), person(m));
+    const seniorOnly = new Set(inBranch.filter((m) => m.lead && !m.team).map((m) => nameKey(m.name)));
+    for (const m of inBranch) if (!m.team && !m.lead) others.set(nameKey(m.name), person(m));
     for (const p of pays) {
       const k = personKey(p.marketer);
-      if (!k || onTeams.has(k) || others.has(k)) continue;
+      if (!k || onTeams.has(k) || others.has(k) || seniorOnly.has(k)) continue;
       const m = roster.get(k);
       others.set(k, m ? person(m) : { key: k, name: k, designation: (p.designation || '').toUpperCase() });
     }
@@ -489,4 +490,33 @@ export function applyPrefs(items: DeckItem[], prefs: Pick<DeckPrefs, 'off' | 'on
     const slide = title ? ({ ...it.slide, title } as DeckSlide) : it.slide;
     return { item: { ...it, slide }, on: isOn(it) };
   });
+}
+
+/**
+ * Each person's figures per branch for a month (what the slide tables show),
+ * for checking an uploaded deck against the workbook.
+ */
+export function figuresByBranch(input: Pick<DeckInput, 'month' | 'payments' | 'marketers' | 'tabs' | 'countAll'>) {
+  const tabBranch = new Map(input.tabs.map((t) => [t.name, t.branch]));
+  const roster = new Map<string, Marketer>();
+  for (const m of input.marketers) {
+    roster.set(nameKey(m.name), m);
+    for (const a of m.aliases) if (!roster.has(nameKey(a))) roster.set(nameKey(a), m);
+  }
+  const branches = new Map<string, { people: Map<string, { inflow: number; infra: number; nc: number }>; total: { inflow: number; infra: number; nc: number } }>();
+  const stats = new Map<string, { people: Map<string, Stat>; total: Stat }>();
+  for (const p of input.payments) {
+    if (p.month !== input.month || !(input.countAll || isConfirmed(p)) || !(p.amount ?? 0)) continue;
+    const b = (p.branch || tabBranch.get(p.tab) || p.tab || '').toUpperCase().trim();
+    if (!stats.has(b)) stats.set(b, { people: new Map(), total: newStat() });
+    const st = stats.get(b)!;
+    add(st.total, p);
+    const k = nameKey(roster.get(nameKey(p.marketer))?.name ?? p.marketer);
+    if (!k) continue;
+    if (!st.people.has(k)) st.people.set(k, newStat());
+    add(st.people.get(k)!, p);
+  }
+  const plain = (x: Stat) => ({ inflow: x.inflow, infra: x.infra, nc: x.nc.size });
+  for (const [b, st] of stats) branches.set(b, { people: new Map([...st.people].map(([k, v]) => [k, plain(v)])), total: plain(st.total) });
+  return branches;
 }

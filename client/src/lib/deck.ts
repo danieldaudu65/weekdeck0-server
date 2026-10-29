@@ -41,7 +41,9 @@ export type DeckSlide =
   | { kind: 'table'; title: string; subtitle: string; table: DeckTable }
   | { kind: 'activities'; title: string; subtitle: string; items: { day: string; text: string }[] }
   | { kind: 'map'; title: string; subtitle: string; image: string; days: { day: string; color: string; stops: string[] }[] }
-  | { kind: 'thanks'; title: string; sub: string };
+  | { kind: 'thanks'; title: string; sub: string }
+  /** A picture filling the slide under its title (a photo or scan of a slide the accountant uploaded). ratio = width / height. */
+  | { kind: 'picture'; title: string; subtitle: string; image: string; ratio: number };
 
 export interface DeckInput {
   team: Team;

@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const Accountant = require('../models/Accountant');
 const Payment = require('../models/Payment');
 const Marketer = require('../models/Marketer');
+const ImportedDeck = require('../models/ImportedDeck');
 const Team = require('../models/Team');
 const asyncHandler = require('../utils/asyncHandler');
 const { signAccountantToken } = require('../utils/tokens');
@@ -194,6 +195,36 @@ router.get(
       .select('month kind tab branch amount clientName confirmation')
       .lean();
     res.json({ year, cells: A.summarize(rows, req.accountant.tabs) });
+  }),
+);
+
+/* ------------------------------------------------------------------ imported slides */
+
+/** The slides uploaded for a month (empty when none). */
+router.get(
+  '/imported',
+  asyncHandler(async (req, res) => {
+    const month = A.cleanMonth(req.query.month);
+    const doc = await ImportedDeck.findOne({ accountant: req.accountant._id, month }).lean();
+    res.json({ month, fileName: doc ? doc.fileName : '', slides: doc ? doc.slides : [] });
+  }),
+);
+
+/** Replace a month's uploaded slides (after the check, after editing). No slides = remove them. */
+router.put(
+  '/imported',
+  asyncHandler(async (req, res) => {
+    const b = req.body || {};
+    const month = A.cleanMonth(b.month);
+    const slides = A.cleanImported(b.slides);
+    const filter = { accountant: req.accountant._id, month };
+    if (!slides.length) {
+      await ImportedDeck.deleteOne(filter);
+      return res.json({ month, fileName: '', slides: [] });
+    }
+    const fileName = String(b.fileName || '').slice(0, 120);
+    await ImportedDeck.updateOne(filter, { $set: { slides, fileName } }, { upsert: true });
+    res.json({ month, fileName, slides });
   }),
 );
 

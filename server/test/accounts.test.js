@@ -75,3 +75,29 @@ test('accountant sign-up rules', () => {
   assert.equal(A.cleanMonth('2026-10'), '2026-10');
   assert.throws(() => A.cleanMonth('2026-1'));
 });
+
+test('imported slides are tidied and limited', () => {
+  const out = A.cleanImported([
+    { id: 'a1', kind: 'table', title: ' FAGBA  SENIOR STAFF ', branch: 'fagba', head: ['MARKETERS NAME', 'INFLOW'], rows: [['KENNETH IPOGAH', '3,333,694.70']], total: ['TOTAL', '3,333,694.70'], junk: 1 },
+    { id: 'a1', kind: 'weird', title: 'x' },
+  ]);
+  assert.equal(out[0].title, 'FAGBA SENIOR STAFF');
+  assert.equal(out[0].branch, 'FAGBA');
+  assert.deepEqual(out[0].rows, [['KENNETH IPOGAH', '3,333,694.70']]);
+  assert.equal(out[0].junk, undefined);
+  assert.equal(out[1].kind, 'table');
+  assert.notEqual(out[1].id, 'a1');
+  assert.throws(() => A.cleanImported('nope'));
+  assert.throws(() => A.cleanImported(Array(81).fill({})));
+});
+
+test('picture slides keep a real picture, within limits', () => {
+  const jpeg = 'data:image/jpeg;base64,' + 'A'.repeat(1000);
+  const [p] = A.cleanImported([{ id: 'p1', kind: 'picture', title: 'Scan', image: jpeg, ratio: 1.7777 }]);
+  assert.equal(p.image, jpeg);
+  assert.equal(p.ratio, 1.778);
+  assert.throws(() => A.cleanImported([{ kind: 'picture', image: 'javascript:alert(1)' }]));
+  assert.throws(() => A.cleanImported([{ kind: 'picture', image: 'data:image/jpeg;base64,' + 'A'.repeat(1_600_000) }]));
+  assert.throws(() => A.cleanImported(Array(9).fill({ kind: 'picture', image: 'data:image/jpeg;base64,' + 'A'.repeat(1_400_000) })));
+  assert.equal(A.cleanImported([{ kind: 'table', image: jpeg }])[0].image, undefined);
+});

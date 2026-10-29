@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreadsheet, History, Pencil, Play, Presentation, Printer, RotateCcw, Sheet } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreadsheet, FileUp, History, Pencil, Play, Presentation, Printer, RotateCcw, Sheet, SquarePen } from 'lucide-react';
 import { useAccounts, Panel } from './AccountsApp';
 import { Button, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
@@ -15,7 +15,10 @@ import { Presenter } from '../../components/Presenter';
 import { layoutSlide } from '../../lib/looks';
 import { lookById } from '../../lib/templates';
 import { accApi } from '../../lib/accounts/api';
-import { applyPrefs, buildAccountsDeck, type DeckPrefs, type HistoryRow, type SummaryCell } from '../../lib/accounts/accDeck';
+import { applyPrefs, buildAccountsDeck, type DeckItem, type DeckPrefs, type HistoryRow, type SummaryCell } from '../../lib/accounts/accDeck';
+import { toDeckSlide, type ImportedSlide } from '../../lib/accounts/slideImport';
+import { SlideImportDialog } from './SlideImportDialog';
+import { SlideEditor } from './SlideEditor';
 import { KINDS, MONTH_NAMES, addMonths, monthName, parseMoney, showMoney, type Kind } from '../../lib/accounts/columns';
 import { exportCsv, exportExcel } from '../../lib/accounts/exporter';
 import { downloadBlob } from '../../lib/accounts/xlsx';
@@ -31,6 +34,32 @@ export function ExportPage() {
   const [presenting, setPresenting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  // Slides uploaded for this month (the accountant's own PowerPoint, checked on import).
+  const [uploaded, setUploaded] = useState<{ fileName: string; slides: ImportedSlide[] } | null>(null);
+  const [importingSlides, setImportingSlides] = useState(false);
+  const [editSlide, setEditSlide] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setUploaded(null);
+    accApi
+      .imported(month)
+      .then((r) => alive && setUploaded({ fileName: r.fileName, slides: r.slides }))
+      .catch(() => alive && setUploaded({ fileName: '', slides: [] }));
+    return () => {
+      alive = false;
+    };
+  }, [month]);
+  const saveUploaded = async (slides: ImportedSlide[]) => {
+    const prev = uploaded;
+    setUploaded({ fileName: uploaded?.fileName ?? '', slides });
+    try {
+      const r = await accApi.saveImported(month, slides, uploaded?.fileName ?? '');
+      setUploaded({ fileName: r.fileName, slides: r.slides });
+    } catch {
+      setUploaded(prev);
+      toast('Couldn’t save the slide. Try again.', 'bad');
+    }
+  };
 
   // Save whatever is waiting first, so the totals include the latest typing.
   useEffect(() => {
@@ -57,9 +86,11 @@ export function ExportPage() {
     }, 700);
   };
 
-  const items = useMemo(
+  const generated = useMemo(
     () =>
-      buildAccountsDeck({
+      !ledger.rows.length
+        ? [] // no workbook rows this month: only uploaded slides (if any)
+        : buildAccountsDeck({
         region: acc.region,
         month,
         payments: ledger.rows,
@@ -71,6 +102,19 @@ export function ExportPage() {
       }),
     [acc.region, acc.tabs, acc.history, month, ledger.rows, marketers, summary, prefs.countAll],
   );
+  const uploadedGroup = `UPLOADED${uploaded?.fileName ? ` · ${uploaded.fileName.replace(/\.pptx$/i, '')}` : ''}`;
+  const items = useMemo(() => {
+    const mine: DeckItem[] = (uploaded?.slides ?? []).map((s) => ({
+      id: `imp:${s.id}`,
+      group: uploadedGroup,
+      label: s.kind === 'cover' ? `Cover · ${s.branch || s.title}` : s.kind === 'thanks' ? 'Thank you' : s.title.replace(/\s+(INFLOW|FOR)\b.*$/i, '') || (s.kind === 'picture' ? 'Picture' : 'Slide'),
+      extra: false,
+      slide: toDeckSlide(s, { region: acc.region, month }),
+    }));
+    // Uploaded slides go before WeekDeck's closing "Thank you".
+    const at = generated.findIndex((g) => g.id === 'thanks');
+    return at >= 0 ? [...generated.slice(0, at), ...mine, ...generated.slice(at)] : [...generated, ...mine];
+  }, [generated, uploaded, uploadedGroup, acc.region, month]);
   const list = useMemo(() => applyPrefs(items, prefs), [items, prefs]);
   const look = useMemo(() => lookById(prefs.lookId), [prefs.lookId]);
   const chosen = list.filter((x) => x.on).map((x) => x.item.slide);
@@ -116,7 +160,20 @@ export function ExportPage() {
     navigate('/accounts/print');
   };
 
-  const loading = ledger.loading || summary === null;
+  const loading = ledger.loading || summary === null || uploaded === null;
+  /** Tick or untick every slide of a section. */
+  const setGroup = (group: string, on: boolean) => {
+    const its = list.filter((x) => x.item.group === group).map((x) => x.item);
+    const ids = new Set(its.map((it) => baseId(it.id)));
+    const extras = new Set(its.filter((it) => it.extra).map((it) => baseId(it.id)));
+    const plain = [...ids].filter((id) => !extras.has(id));
+    choose({
+      ...prefs,
+      on: on ? [...new Set([...prefs.on, ...extras])] : prefs.on.filter((x) => !extras.has(x)),
+      off: on ? prefs.off.filter((x) => !plain.includes(x)) : [...new Set([...prefs.off, ...plain])],
+    });
+  };
+  const editing1 = editSlide ? uploaded?.slides.find((s) => s.id === editSlide) : null;
   let lastGroup = '';
 
   return (
@@ -162,17 +219,28 @@ export function ExportPage() {
           <h2 className="text-xl font-extrabold">
             Slides <span className="text-sm font-semibold text-muted">· {chosen.length} of {list.length} ticked</span>
           </h2>
-          {(prefs.order.length > 0 || prefs.titles.length > 0) && (
-            <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" aria-hidden />} onClick={() => choose({ ...prefs, order: [], titles: [] })}>
-              Standard order and titles
+          <div className="flex flex-wrap gap-2">
+            {(prefs.order.length > 0 || prefs.titles.length > 0) && (
+              <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" aria-hidden />} onClick={() => choose({ ...prefs, order: [], titles: [] })}>
+                Standard order and titles
+              </Button>
+            )}
+            <Button size="sm" variant="soft" icon={<FileUp className="size-4" aria-hidden />} onClick={() => setImportingSlides(true)}>
+              Import slides
             </Button>
-          )}
+          </div>
         </div>
         {loading ? (
           <Spinner label="Working out the figures…" />
-        ) : !ledger.rows.length ? (
+        ) : !list.length ? (
           <Panel>
-            <p className="py-6 text-center text-muted">No rows in {monthName(month)} yet. Import or type them in the Workbook first.</p>
+            <p className="py-6 text-center text-muted">
+              No rows in {monthName(month)} yet. Import or type them in the Workbook, or{' '}
+              <button type="button" className="font-bold text-blue" onClick={() => setImportingSlides(true)}>
+                import a deck you already have
+              </button>
+              .
+            </p>
           </Panel>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -182,7 +250,30 @@ export function ExportPage() {
               const isEditing = editing === item.id;
               return (
                 <div key={item.id} className="contents">
-                  {header && <h3 className="col-span-full mt-2 text-sm font-extrabold uppercase tracking-wider text-muted">{header}</h3>}
+                  {header && (
+                    <div className="col-span-full mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-extrabold uppercase tracking-wider text-muted">{header}</h3>
+                      <span className="flex gap-3 text-sm font-bold">
+                        <button type="button" className="text-blue" onClick={() => setGroup(item.group, true)}>
+                          Tick all
+                        </button>
+                        <button type="button" className="text-muted hover:text-ink" onClick={() => setGroup(item.group, false)}>
+                          Untick all
+                        </button>
+                        {item.id.startsWith('imp:') && (
+                          <button
+                            type="button"
+                            className="text-muted hover:text-bad"
+                            onClick={() => {
+                              if (window.confirm(`Remove the ${uploaded?.slides.length ?? 0} uploaded slides from ${monthName(month)}?`)) void saveUploaded([]);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <div className={`min-w-0 rounded-2xl bg-white p-2 shadow-sm ring-2 transition ${on ? 'ring-blue/70' : 'opacity-55 ring-transparent'}`}>
                     <button type="button" onClick={() => toggle(item.id, item.extra, on)} className="block w-full overflow-hidden rounded-xl ring-1 ring-ink/5" aria-pressed={on} aria-label={`${on ? 'Leave out' : 'Include'} ${item.label}`}>
                       <SlideCanvas bg={laidAll[i].bg} shapes={laidAll[i].shapes} label={item.label} />
@@ -195,9 +286,15 @@ export function ExportPage() {
                           {item.extra && <span className="text-[11px] font-bold uppercase text-blue">Extra</span>}
                         </span>
                       </label>
-                      <IconBtn label="Rename" onClick={() => setEditing(isEditing ? null : item.id)}>
-                        <Pencil className="size-4" aria-hidden />
-                      </IconBtn>
+                      {item.id.startsWith('imp:') ? (
+                        <IconBtn label="Edit slide" onClick={() => setEditSlide(item.id.slice(4))}>
+                          <SquarePen className="size-4" aria-hidden />
+                        </IconBtn>
+                      ) : (
+                        <IconBtn label="Rename" onClick={() => setEditing(isEditing ? null : item.id)}>
+                          <Pencil className="size-4" aria-hidden />
+                        </IconBtn>
+                      )}
                       <IconBtn label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
                         <ArrowUp className="size-4" aria-hidden />
                       </IconBtn>
@@ -255,6 +352,37 @@ export function ExportPage() {
       <EarlierMonths summary={summary ?? []} />
 
       {presenting && <Presenter slides={laidChosen} title={deckTitle} onExit={() => setPresenting(false)} />}
+      {importingSlides && (
+        <SlideImportDialog
+          onClose={() => setImportingSlides(false)}
+          onDone={(m) => {
+            setImportingSlides(false);
+            if (m !== month) setMonth(m);
+            else
+              void accApi
+                .imported(month)
+                .then((r) => setUploaded({ fileName: r.fileName, slides: r.slides }))
+                .catch(() => undefined);
+          }}
+        />
+      )}
+      {editing1 && (
+        <SlideEditor
+          slide={editing1}
+          month={month}
+          region={acc.region}
+          look={look}
+          onClose={() => setEditSlide(null)}
+          onSave={(next) => {
+            setEditSlide(null);
+            void saveUploaded(uploaded!.slides.map((s) => (s.id === next.id ? next : s)));
+          }}
+          onDelete={() => {
+            setEditSlide(null);
+            void saveUploaded(uploaded!.slides.filter((s) => s.id !== editing1.id));
+          }}
+        />
+      )}
     </div>
   );
 }

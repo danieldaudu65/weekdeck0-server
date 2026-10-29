@@ -2,6 +2,7 @@
 import { api, ApiError } from '../api';
 import type { Payment } from './columns';
 import type { DeckPrefs, HistoryRow, Marketer, SummaryCell } from './accDeck';
+import type { ImportedSlide } from './slideImport';
 
 const KEY = 'weekdeck.accountsToken';
 
@@ -77,6 +78,8 @@ export const accApi = {
   marketers: () => call<{ marketers: Marketer[] }>('/marketers'),
   saveMarketers: (upserts: Partial<Marketer>[], deletes: string[] = []) => send<{ marketers: Marketer[] }>('POST', '/marketers/save', { upserts, deletes }),
   merge: (from: string[], into: string) => send<{ moved: number; marketers: Marketer[] }>('POST', '/marketers/merge', { from, into }),
+  imported: (month: string) => call<{ month: string; fileName: string; slides: ImportedSlide[] }>(`/imported?month=${month}`),
+  saveImported: (month: string, slides: ImportedSlide[], fileName = '') => send<{ month: string; fileName: string; slides: ImportedSlide[] }>('PUT', '/imported', { month, slides, fileName }),
   teams: (q = '') => call<{ teams: WeekDeckTeam[] }>(`/teams?q=${encodeURIComponent(q)}`),
 };
 

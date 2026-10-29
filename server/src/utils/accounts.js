@@ -251,8 +251,53 @@ function summarize(payments, tabs = []) {
     .sort((a, b) => (a.month === b.month ? a.branch.localeCompare(b.branch) : a.month.localeCompare(b.month)));
 }
 
+/* ------------------------------------------------------------------ imported slides */
+
+const SLIDE_KINDS = ['cover', 'table', 'text', 'thanks', 'picture'];
+const MAX_SLIDES = 80;
+const MAX_PICTURE = 1_500_000; // one picture slide (a JPEG data URL, ~1600 px wide)
+const MAX_PICTURES = 11_000_000; // all of a month's pictures together (the database keeps a month in one record)
+
+/** Slides from an uploaded deck (after the accountant checked them): title, table, branch. */
+function cleanImported(raw) {
+  if (!Array.isArray(raw)) throw new ValidationError('Slides must be a list.');
+  if (raw.length > MAX_SLIDES) throw new ValidationError(`At most ${MAX_SLIDES} imported slides a month.`);
+  const cells = (list, max) => (Array.isArray(list) ? list.slice(0, max).map((c) => text(c, 160)) : []);
+  const seen = new Set();
+  let pictureBytes = 0;
+  return raw.map((s) => {
+    const r = s || {};
+    const id = /^[A-Za-z0-9_-]{1,40}$/.test(String(r.id || '')) && !seen.has(r.id) ? String(r.id) : `s${seen.size}${Date.now().toString(36)}`;
+    seen.add(id);
+    const head = cells(r.head, 12);
+    return {
+      id,
+      kind: SLIDE_KINDS.includes(r.kind) ? r.kind : 'table',
+      title: text(r.title, 200),
+      subtitle: text(r.subtitle, 200),
+      branch: text(r.branch, 40).toUpperCase(),
+      head,
+      rows: Array.isArray(r.rows) ? r.rows.slice(0, 60).map((row) => cells(row, 12)) : [],
+      total: cells(r.total, 12),
+      lines: cells(r.lines, 12),
+      ...(r.kind === 'picture' ? picture(r) : {}),
+    };
+  });
+
+  function picture(r) {
+    const image = String(r.image || '');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw new ValidationError('A picture slide is missing its picture.');
+    if (image.length > MAX_PICTURE) throw new ValidationError('One of the pictures is too large.');
+    pictureBytes += image.length;
+    if (pictureBytes > MAX_PICTURES) throw new ValidationError('Too many pictures for one month. Remove some picture slides and try again.');
+    const ratio = Number(r.ratio);
+    return { image, ratio: Number.isFinite(ratio) && ratio > 0.1 && ratio < 10 ? Math.round(ratio * 1000) / 1000 : 16 / 9 };
+  }
+}
+
 module.exports = {
   KINDS,
+  cleanImported,
   FIELDS,
   MAX_ROWS_PER_SAVE,
   cleanPayment,
