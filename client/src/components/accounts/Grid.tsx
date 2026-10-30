@@ -232,9 +232,15 @@ export function Grid({ columns, groups, rows, serial, flags, suggestions, onChan
   };
 
   const onPaste = (e: ClipboardEvent) => {
-    if (editing || readOnly) return;
+    if (readOnly) return;
     const text = e.clipboardData.getData('text/plain');
     if (!text) return;
+    // While a cell is open, a single value pastes into it as normal; a block
+    // (copied from Excel / Sheets: tabs or several lines) still fills the grid.
+    if (editing) {
+      if (!/[\t\n]/.test(text.replace(/\r?\n$/, ''))) return;
+      setEditing(null);
+    }
     e.preventDefault();
     const block = parseClipboard(text);
     const changes: CellChange[] = [];

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CloudOff, FileUp, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CloudOff, Download, Eraser, FileUp, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { useAccounts } from './AccountsApp';
 import { ImportDialog } from './ImportDialog';
+import { SheetsDownload } from './SheetsDownload';
 import { Grid, type CellChange } from '../../components/accounts/Grid';
 import { Button, Card, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
@@ -15,8 +16,10 @@ export function WorkbookPage() {
   const [kind, setKind] = useState<Kind>('land');
   const [tabName, setTabName] = useState<string>('');
   const [q, setQ] = useState('');
+  const [clearing, setClearing] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [importing, setImporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [addingTab, setAddingTab] = useState(false);
 
   // Tabs: the workbook's list, plus any tab that has rows this month.
@@ -132,6 +135,18 @@ export function WorkbookPage() {
     toast(`${rows.length} row${rows.length === 1 ? '' : 's'} deleted`);
   };
 
+  /** Empty a tab, a whole sheet, or the whole month (e.g. after testing, or before importing again). */
+  const clearRows = (what: 'tab' | 'sheet' | 'month') => {
+    const sheet = KINDS.find((k) => k.id === kind)!.label;
+    const rows = ledger.rows.filter((p) => (what === 'month' ? true : what === 'sheet' ? p.kind === kind : p.kind === kind && p.tab === tab?.name));
+    setClearing(false);
+    if (!rows.length) return;
+    const where = what === 'month' ? `all of ${monthName(month)}` : what === 'sheet' ? `${sheet}, ${monthName(month)}` : `${tab?.name} (${sheet}, ${monthName(month)})`;
+    if (!window.confirm(`Clear ${rows.length} row${rows.length === 1 ? '' : 's'} from ${where}? This can’t be undone.`)) return;
+    ledger.remove(rows);
+    toast(`${rows.length} row${rows.length === 1 ? '' : 's'} cleared`);
+  };
+
   const addTab = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -188,6 +203,11 @@ export function WorkbookPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SaveBadge state={ledger.state} error={ledger.error} />
+          {ledger.rows.length > 0 && (
+            <Button variant="soft" icon={<Download className="size-4" aria-hidden />} onClick={() => setDownloading(true)}>
+              Download
+            </Button>
+          )}
           <Button icon={<FileUp className="size-4" aria-hidden />} onClick={() => setImporting(true)}>
             Import files
           </Button>
@@ -269,6 +289,37 @@ export function WorkbookPage() {
             <Button size="sm" variant="danger" icon={<Trash2 className="size-4" aria-hidden />} onClick={deleteSelected} disabled={!selected.some((i) => shown[i])}>
               Delete {selected.filter((i) => shown[i]).length > 1 ? `${selected.filter((i) => shown[i]).length} rows` : 'row'}
             </Button>
+            <div className="relative">
+              <Button size="sm" variant="soft" icon={<Eraser className="size-4" aria-hidden />} onClick={() => setClearing((c) => !c)} aria-expanded={clearing} disabled={!ledger.rows.length}>
+                Clear
+              </Button>
+              {clearing && (
+                <>
+                  <button type="button" aria-label="Close" className="fixed inset-0 z-30 cursor-default" onClick={() => setClearing(false)} />
+                  <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl bg-white p-1 shadow-xl ring-1 ring-line" role="menu">
+                    {(
+                      [
+                        ['tab', `This tab · ${tab?.name ?? ''}`, inTab.length],
+                        ['sheet', `All tabs · ${KINDS.find((k) => k.id === kind)!.short}`, kindCount(kind)],
+                        ['month', `Everything in ${monthName(month)}`, ledger.rows.length],
+                      ] as const
+                    ).map(([id, label, n]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="menuitem"
+                        disabled={!n}
+                        onClick={() => clearRows(id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold hover:bg-bad/10 hover:text-bad disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-inherit"
+                      >
+                        <span className="truncate">{label}</span>
+                        <span className="shrink-0 text-xs text-muted">{n}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {q && <p className="text-sm font-semibold text-muted">{shown.length} of {inTab.length} rows match “{q}”</p>}
@@ -316,6 +367,7 @@ export function WorkbookPage() {
         </>
       )}
 
+      {downloading && <SheetsDownload onClose={() => setDownloading(false)} />}
       {importing && (
         <ImportDialog
           onClose={() => setImporting(false)}

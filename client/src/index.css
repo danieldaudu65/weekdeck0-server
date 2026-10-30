@@ -104,3 +104,7 @@ select {
     transform: scaleX(1);
   }
 }
+
+/* Sideways strips (look picker): a thin scrollbar, nothing on phones. */
+.wd-strip { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, currentColor 25%, transparent) transparent; }
+@media (pointer: coarse) { .wd-strip { scrollbar-width: none; } }

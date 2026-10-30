@@ -1,6 +1,6 @@
 /**
  * The looks a deck can take: a STYLE (the layout: where things sit, shapes,
- * fonts) combined with a PALETTE (the colours). 8 styles × 20 palettes.
+ * fonts) combined with a PALETTE (the colours). 12 styles × 20 palettes.
  * Hex colours are written without "#" (the PowerPoint builder needs it that way).
  */
 export interface Theme {
@@ -63,6 +63,10 @@ export const STYLES: StyleInfo[] = [
   { id: 'glow', name: 'Night Glow', blurb: 'Dark with soft glowing lights' },
   { id: 'playful', name: 'Bubbles', blurb: 'Round, friendly and bright' },
   { id: 'dashboard', name: 'Dashboard', blurb: 'Everything in tidy panels' },
+  { id: 'rail', name: 'Side Rail', blurb: 'A colour rail down the side' },
+  { id: 'ribbon', name: 'Ribbon', blurb: 'Titles on a bold ribbon' },
+  { id: 'framed', name: 'Framed', blurb: 'A border, centred titles' },
+  { id: 'stripes', name: 'Stripes', blurb: 'Bands of colour, top and bottom' },
 ];
 
 export interface Look {

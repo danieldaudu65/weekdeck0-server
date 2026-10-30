@@ -903,7 +903,238 @@ const dashboard: StyleImpl = {
   },
 };
 
-const STYLE_IMPL: Record<string, StyleImpl> = { classic, corporate, bold, minimal, editorial, glow: glowStyle, playful, dashboard };
+/* 9. Side Rail: a colour rail down the left edge. */
+const rail: StyleImpl = {
+  cover(s, t) {
+    const img = Boolean(s.image);
+    const tw = img ? 640 : 1000;
+    return {
+      bg: t.coverBg,
+      shapes: [
+        ...(img ? [{ type: 'image', x: 800, y: 0, w: 480, h: 720, src: s.image } as S] : [R(1100, 0, 180, 720, mix(t.coverBg, 'FFFFFF', 0.1))]),
+        R(0, 0, 40, 720, t.accent),
+        R(40, 0, 8, 720, mix(t.coverBg, 'FFFFFF', 0.3)),
+        T(110, 110, tw, 30, s.kicker ?? 'WEEKLY REPORT', 17, coverPop(t), { bold: true, spacing: 3 }),
+        T(110, 150, tw, 270, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 270, 62, 28), t.coverInk, { bold: true, valign: 'top' }),
+        R(110, 446, 360, 52, null, 26, { stroke: coverPop(t), strokeW: 3 }),
+        T(110, 446, 360, 52, s.week, fit(s.week, 330, 52, 19), t.coverInk, { bold: true, align: 'center' }),
+        T(110, 530, tw, 44, s.name.toUpperCase(), fit(s.name.toUpperCase(), tw, 44, 30), t.coverInk, { bold: true }),
+        T(110, 576, tw, 30, s.role.toUpperCase(), 18, t.coverMuted, { spacing: 1 }),
+      ],
+    };
+  },
+  thanks(s, t) {
+    return {
+      bg: t.coverBg,
+      shapes: [
+        R(0, 0, 40, 720, t.accent),
+        R(40, 0, 8, 720, mix(t.coverBg, 'FFFFFF', 0.3)),
+        T(110, 280, 1100, 120, s.title.toUpperCase(), 88, t.coverInk, { bold: true }),
+        R(110, 410, 120, 8, t.accent),
+        T(110, 440, 1100, 40, s.sub.toUpperCase(), 22, t.coverMuted, { spacing: 1 }),
+      ],
+    };
+  },
+  frame(title, subtitle, t, ctx, kind) {
+    const up = kind === 'summary' ? title : title.toUpperCase();
+    return {
+      bg: t.bg,
+      area: { x: 84, y: subtitle ? 164 : 150, w: 1136, h: 490 },
+      shapes: [
+        R(0, 0, 28, 720, t.primary),
+        R(28, 0, 6, 720, t.accent),
+        T(84, 44, 960, 64, up, fit(up, 960, 64, 40, 22), t.ink, { bold: true }),
+        ...(subtitle ? [T(84, 106, 960, 30, subtitle, 18, t.muted)] : []),
+        R(1124, 44, 96, 56, t.primary, 14),
+        T(1124, 44, 96, 56, pad2(ctx.page), 26, t.primaryInk, { bold: true, align: 'center' }),
+        T(84, 668, 900, 28, ctx.teamName, 14, t.muted),
+      ],
+    };
+  },
+  summary: (s, a, t) => sumCards(s, a, stdSum(t, 12)),
+  team: (s, a, t) => teamNumbered(s.members, a, { rule: t.line, num: t.highlight, ink: t.ink, label: t.muted }),
+  table: (s, a, t) => table(s, a, stdTable(t)),
+  activities: (s, a, t) => actTimeline(s.items, a, { line: t.line, dot: t.primary, day: t.ink, ink: t.ink, muted: t.muted }),
+};
+
+/* 10. Ribbon: the title sits on a ribbon across the top. */
+const ribbon: StyleImpl = {
+  cover(s, t) {
+    const img = Boolean(s.image);
+    const tw = img ? 720 : 1120;
+    const rw = img ? 700 : 820;
+    return {
+      bg: t.coverBg,
+      shapes: [
+        ...(img ? [{ type: 'image', x: 880, y: 0, w: 400, h: 720, src: s.image } as S] : [O(980, -120, 420, mix(t.coverBg, 'FFFFFF', 0.1)), O(1080, 520, 260, mix(t.coverBg, 'FFFFFF', 0.08))]),
+        T(80, 96, tw, 28, s.kicker ?? 'WEEKLY REPORT', 17, coverPop(t), { bold: true, spacing: 3 }),
+        T(80, 134, tw, 240, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 240, 62, 28), t.coverInk, { bold: true, valign: 'top' }),
+        R(0, 400, rw, 92, t.accent),
+        O(rw - 46, 400, 92, t.accent),
+        T(80, 400, rw - 120, 92, s.week, fit(s.week, rw - 120, 92, 30, 16), t.accentInk, { bold: true }),
+        T(80, 530, tw, 44, s.name.toUpperCase(), fit(s.name.toUpperCase(), tw, 44, 30), t.coverInk, { bold: true }),
+        T(80, 576, tw, 30, s.role.toUpperCase(), 18, t.coverMuted, { spacing: 1 }),
+      ],
+    };
+  },
+  thanks(s, t) {
+    return {
+      bg: t.coverBg,
+      shapes: [
+        R(0, 290, 1280, 140, t.accent),
+        T(80, 290, 1120, 140, s.title.toUpperCase(), 84, t.accentInk, { bold: true, align: 'center' }),
+        T(80, 470, 1120, 40, s.sub.toUpperCase(), 22, t.coverMuted, { align: 'center', spacing: 1 }),
+      ],
+    };
+  },
+  frame(title, subtitle, t, ctx, kind) {
+    const up = kind === 'summary' ? title : title.toUpperCase();
+    return {
+      bg: t.bg,
+      area: { x: 64, y: 164, w: 1152, h: 488 },
+      shapes: [
+        R(0, 36, 840, 88, t.primary),
+        O(796, 36, 88, t.primary),
+        T(64, 36, 760, 88, up, fit(up, 760, 88, 36, 18), t.primaryInk, { bold: true }),
+        T(900, 36, 316, 88, subtitle, fit(subtitle, 316, 88, 18, 11), t.muted, { align: 'right' }),
+        T(64, 664, 900, 28, ctx.teamName, 14, t.muted),
+        T(1016, 664, 200, 28, `${ctx.page} / ${ctx.total}`, 14, t.muted, { align: 'right' }),
+        R(0, 704, 1280, 16, t.accent),
+      ],
+    };
+  },
+  summary: (s, a, t) => sumBig(s, a, { ...stdSum(t, 18), rule: t.line }),
+  team: (s, a, t) => teamBubbles(s.members, a, stdTeam(t)),
+  table: (s, a, t) => table(s, a, { ...stdTable(t), headFill: t.accent, headInk: t.accentInk, totalFill: t.primary, totalInk: t.primaryInk }),
+  activities: (s, a, t) => actColumns(s.items, a, { dayFill: t.primary, dayInk: t.primaryInk, card: t.surface, ink: t.ink, muted: t.muted, radius: 18, dot: t.accent }),
+};
+
+/* 11. Framed: a border around every slide, centred titles. */
+const framed: StyleImpl = {
+  cover(s, t) {
+    const img = Boolean(s.image);
+    const edge = mix(t.coverBg, t.coverInk, 0.45);
+    const corners = [R(20, 20, 24, 24, t.accent), R(1236, 20, 24, 24, t.accent), R(20, 676, 24, 24, t.accent), R(1236, 676, 24, 24, t.accent)];
+    if (img) {
+      return {
+        bg: t.coverBg,
+        shapes: [
+          R(32, 32, 1216, 656, null, 0, { stroke: edge, strokeW: 3 }),
+          ...corners,
+          { type: 'image', x: 760, y: 80, w: 440, h: 560, src: s.image } as S,
+          T(96, 120, 600, 28, s.kicker ?? 'WEEKLY REPORT', 16, coverPop(t), { bold: true, spacing: 3 }),
+          T(96, 160, 600, 250, s.title.toUpperCase(), fit(s.title.toUpperCase(), 600, 250, 54, 26), t.coverInk, { bold: true, valign: 'top' }),
+          R(96, 440, 340, 50, t.accent, 4),
+          T(96, 440, 340, 50, s.week, fit(s.week, 310, 50, 18), t.accentInk, { bold: true, align: 'center' }),
+          T(96, 520, 600, 40, s.name.toUpperCase(), fit(s.name.toUpperCase(), 600, 40, 28), t.coverInk, { bold: true }),
+          T(96, 562, 600, 30, s.role.toUpperCase(), 17, t.coverMuted, { spacing: 1 }),
+        ],
+      };
+    }
+    return {
+      bg: t.coverBg,
+      shapes: [
+        R(32, 32, 1216, 656, null, 0, { stroke: edge, strokeW: 3 }),
+        ...corners,
+        T(120, 110, 1040, 28, s.kicker ?? 'WEEKLY REPORT', 17, coverPop(t), { bold: true, spacing: 3, align: 'center' }),
+        T(120, 150, 1040, 250, s.title.toUpperCase(), fit(s.title.toUpperCase(), 1040, 250, 64, 28), t.coverInk, { bold: true, align: 'center' }),
+        R(450, 424, 380, 52, t.accent, 4),
+        T(450, 424, 380, 52, s.week, fit(s.week, 350, 52, 19), t.accentInk, { bold: true, align: 'center' }),
+        T(120, 510, 1040, 44, s.name.toUpperCase(), fit(s.name.toUpperCase(), 1040, 44, 30), t.coverInk, { bold: true, align: 'center' }),
+        T(120, 556, 1040, 30, s.role.toUpperCase(), 18, t.coverMuted, { spacing: 1, align: 'center' }),
+      ],
+    };
+  },
+  thanks(s, t) {
+    const edge = mix(t.coverBg, t.coverInk, 0.45);
+    return {
+      bg: t.coverBg,
+      shapes: [
+        R(32, 32, 1216, 656, null, 0, { stroke: edge, strokeW: 3 }),
+        R(20, 20, 24, 24, t.accent), R(1236, 20, 24, 24, t.accent), R(20, 676, 24, 24, t.accent), R(1236, 676, 24, 24, t.accent),
+        T(120, 270, 1040, 130, s.title.toUpperCase(), 88, t.coverInk, { bold: true, align: 'center' }),
+        R(580, 410, 120, 6, t.accent),
+        T(120, 440, 1040, 40, s.sub.toUpperCase(), 21, t.coverMuted, { align: 'center', spacing: 1 }),
+      ],
+    };
+  },
+  frame(title, subtitle, t, ctx, kind) {
+    const up = kind === 'summary' ? title : title.toUpperCase();
+    return {
+      bg: t.bg,
+      area: { x: 76, y: subtitle ? 176 : 160, w: 1128, h: subtitle ? 456 : 472 },
+      shapes: [
+        R(24, 24, 1232, 672, null, 0, { stroke: t.primary, strokeW: 3 }),
+        R(14, 14, 20, 20, t.accent), R(1246, 14, 20, 20, t.accent), R(14, 686, 20, 20, t.accent), R(1246, 686, 20, 20, t.accent),
+        T(100, 50, 1080, 60, up, fit(up, 1080, 60, 38, 22), t.ink, { bold: true, align: 'center' }),
+        ...(subtitle ? [T(100, 108, 1080, 28, subtitle, 17, t.muted, { align: 'center' })] : []),
+        R(600, subtitle ? 146 : 122, 80, 5, t.accent),
+        T(100, 644, 1080, 28, `${ctx.teamName}${ctx.teamName ? '  ·  ' : ''}${ctx.page} / ${ctx.total}`, 13, t.muted, { align: 'center', bold: true }),
+      ],
+    };
+  },
+  summary: (s, a, t) => sumCards(s, a, stdSum(t, 4)),
+  team: (s, a, t) => teamCards(s.members, a, stdTeam(t, { radius: 10 })),
+  table: (s, a, t) => table(s, a, stdTable(t)),
+  activities: (s, a, t) => actLedger(s.items, a, { rule: t.line, day: t.ink, ink: t.ink, muted: t.muted, num: t.highlight }),
+};
+
+/* 12. Stripes: bands of colour top and bottom. */
+const stripes: StyleImpl = {
+  cover(s, t) {
+    const img = Boolean(s.image);
+    const tw = img ? 680 : 760;
+    const band = mix(t.coverBg, 'FFFFFF', 0.2);
+    return {
+      bg: t.coverBg,
+      shapes: [
+        ...(img
+          ? [{ type: 'image', x: 920, y: 0, w: 360, h: 720, src: s.image } as S, R(860, 0, 36, 720, t.accent), R(900, 0, 14, 720, band)]
+          : [R(930, 0, 90, 720, t.accent), R(1040, 0, 50, 720, band), R(1110, 0, 26, 720, t.accent), R(1156, 0, 12, 720, band)]),
+        T(80, 110, tw, 28, s.kicker ?? 'WEEKLY REPORT', 17, coverPop(t), { bold: true, spacing: 3 }),
+        T(80, 150, tw, 270, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 270, 60, 28), t.coverInk, { bold: true, valign: 'top' }),
+        R(80, 446, 360, 52, t.accent, 26),
+        T(80, 446, 360, 52, s.week, fit(s.week, 330, 52, 19), t.accentInk, { bold: true, align: 'center' }),
+        T(80, 530, tw, 44, s.name.toUpperCase(), fit(s.name.toUpperCase(), tw, 44, 30), t.coverInk, { bold: true }),
+        T(80, 576, tw, 30, s.role.toUpperCase(), 18, t.coverMuted, { spacing: 1 }),
+      ],
+    };
+  },
+  thanks(s, t) {
+    const band = mix(t.coverBg, 'FFFFFF', 0.2);
+    return {
+      bg: t.coverBg,
+      shapes: [
+        R(0, 0, 1280, 40, t.accent), R(0, 52, 1280, 14, band),
+        R(0, 654, 1280, 14, band), R(0, 680, 1280, 40, t.accent),
+        T(80, 280, 1120, 120, s.title.toUpperCase(), 88, t.coverInk, { bold: true, align: 'center' }),
+        T(80, 420, 1120, 40, s.sub.toUpperCase(), 22, t.coverMuted, { align: 'center', spacing: 1 }),
+      ],
+    };
+  },
+  frame(title, subtitle, t, ctx, kind) {
+    const up = kind === 'summary' ? title : title.toUpperCase();
+    return {
+      bg: t.bg,
+      area: { x: 80, y: subtitle ? 172 : 160, w: 1120, h: subtitle ? 470 : 482 },
+      shapes: [
+        R(0, 0, 1280, 14, t.primary), R(0, 18, 1280, 6, t.accent),
+        T(80, 52, 960, 62, up, fit(up, 960, 62, 40, 22), t.ink, { bold: true }),
+        ...(subtitle ? [T(80, 112, 960, 30, subtitle, 18, t.muted)] : []),
+        R(1104, 56, 96, 48, t.accent, 24),
+        T(1104, 56, 96, 48, pad2(ctx.page), 22, t.accentInk, { bold: true, align: 'center' }),
+        T(80, 660, 900, 26, ctx.teamName, 14, t.muted),
+        R(0, 696, 1280, 6, t.accent), R(0, 706, 1280, 14, t.primary),
+      ],
+    };
+  },
+  summary: (s, a, t) => sumCards(s, a, stdSum(t, 20)),
+  team: (s, a, t) => teamList(s.members, a, stdTeam(t)),
+  table: (s, a, t) => table(s, a, { ...stdTable(t), totalFill: t.primary, totalInk: t.primaryInk }),
+  activities: (s, a, t) => actRows(s.items, a, { dayFill: t.accent, dayInk: t.accentInk, card: t.surface, ink: t.ink, muted: t.muted, radius: 22 }),
+};
+
+const STYLE_IMPL: Record<string, StyleImpl> = { classic, corporate, bold, minimal, editorial, glow: glowStyle, playful, dashboard, rail, ribbon, framed, stripes };
 
 /* ------------------------------------------------------------------ shared: map slide, notes */
 

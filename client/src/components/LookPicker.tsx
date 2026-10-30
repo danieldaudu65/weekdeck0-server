@@ -27,8 +27,8 @@ export function LookPicker({ look, cover, onChange }: { look: Look; cover?: Deck
             <Shuffle className="size-3.5" aria-hidden /> Surprise me
           </button>
         </div>
-        {/* On phones the styles slide sideways inside this strip; the page itself never scrolls sideways. */}
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-4 pb-2 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
+        {/* Two rows that slide sideways; the page itself never scrolls sideways. */}
+        <div className="wd-strip -mx-4 grid snap-x snap-mandatory auto-cols-[10.5rem] grid-flow-col grid-rows-2 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-3 md:mx-0 md:auto-cols-[12.5rem] md:px-0">
           {STYLES.map((st) => {
             const on = st.id === look.style.id;
             const id = lookId(st.id, look.palette.id);
@@ -39,7 +39,7 @@ export function LookPicker({ look, cover, onChange }: { look: Look; cover?: Deck
                 type="button"
                 onClick={() => onChange(id)}
                 aria-pressed={on}
-                className={`relative w-44 min-w-0 shrink-0 snap-start rounded-2xl border-2 bg-white p-1.5 text-left transition md:w-auto ${on ? 'border-blue shadow-[0_10px_24px_-14px_rgba(39,71,216,0.9)]' : 'border-transparent hover:border-line'}`}
+                className={`relative min-w-0 snap-start rounded-2xl border-2 bg-white p-1.5 text-left transition ${on ? 'border-blue shadow-[0_10px_24px_-14px_rgba(39,71,216,0.9)]' : 'border-transparent hover:border-line'}`}
               >
                 <div className="pointer-events-none overflow-hidden rounded-xl ring-1 ring-ink/5">
                   <SlideCanvas bg={laid.bg} shapes={laid.shapes} />
@@ -61,7 +61,7 @@ export function LookPicker({ look, cover, onChange }: { look: Look; cover?: Deck
         <p className="mb-2 px-1 text-sm font-extrabold">
           Colours <span className="font-semibold text-muted">· {look.palette.name}</span>
         </p>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="wd-strip -mx-4 grid auto-cols-max grid-flow-col grid-rows-2 gap-2.5 overflow-x-auto overscroll-x-contain px-4 py-1.5 md:mx-0 md:px-1">
           {PALETTES.map((p) => {
             const on = p.id === look.palette.id;
             return (

@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreadsheet, FileUp, History, Pencil, Play, Presentation, Printer, RotateCcw, Sheet, SquarePen } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileUp, History, Pencil, Play, Presentation, Printer, RotateCcw, SquarePen } from 'lucide-react';
 import { useAccounts, Panel } from './AccountsApp';
 import { Button, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
@@ -19,9 +19,7 @@ import { applyPrefs, buildAccountsDeck, type DeckItem, type DeckPrefs, type Hist
 import { toDeckSlide, type ImportedSlide } from '../../lib/accounts/slideImport';
 import { SlideImportDialog } from './SlideImportDialog';
 import { SlideEditor } from './SlideEditor';
-import { KINDS, MONTH_NAMES, addMonths, monthName, parseMoney, showMoney, type Kind } from '../../lib/accounts/columns';
-import { exportCsv, exportExcel } from '../../lib/accounts/exporter';
-import { downloadBlob } from '../../lib/accounts/xlsx';
+import { MONTH_NAMES, addMonths, monthName, parseMoney, showMoney } from '../../lib/accounts/columns';
 import { setPrintJob } from '../../lib/accounts/printJob';
 
 export function ExportPage() {
@@ -352,7 +350,6 @@ export function ExportPage() {
         </div>
       )}
 
-      <SheetsExport />
       <EarlierMonths summary={summary ?? []} />
 
       {presenting && <Presenter slides={laidChosen} title={deckTitle} onExit={() => setPresenting(false)} />}
@@ -394,98 +391,6 @@ export function ExportPage() {
 function IconBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled} className="grid size-9 shrink-0 place-items-center rounded-xl text-muted hover:bg-paper hover:text-ink disabled:opacity-30">
-      {children}
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ sheets */
-
-function SheetsExport() {
-  const { acc, month, ledger } = useAccounts();
-  const toast = useToast();
-  const tabs = useMemo(() => [...new Set([...acc.tabs.map((t) => t.name), ...ledger.rows.map((p) => p.tab)])], [acc.tabs, ledger.rows]);
-  const [kinds, setKinds] = useState<Kind[]>(['land', 'new', 'infra']);
-  const [picked, setPicked] = useState<string[] | null>(null);
-  const chosenTabs = picked ?? tabs;
-  const count = (k: Kind, t: string) => ledger.rows.filter((p) => p.kind === k && p.tab === t).length;
-  const rows = kinds.reduce((a, k) => a + chosenTabs.reduce((b, t) => b + count(k, t), 0), 0);
-
-  const flip = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
-
-  const run = async (what: 'xlsx' | 'csv') => {
-    try {
-      await ledger.flush();
-      const choice = { month, kinds, tabs: chosenTabs };
-      const f = what === 'xlsx' ? await exportExcel(ledger.rows, choice) : await exportCsv(ledger.rows, choice);
-      downloadBlob(f.blob, f.name);
-      toast(`${f.name} downloaded`);
-    } catch {
-      toast('Couldn’t make the file. Try again.', 'bad');
-    }
-  };
-
-  return (
-    <Panel
-      title={
-        <span className="flex items-center gap-2">
-          <Sheet className="size-5 text-ok" aria-hidden /> Download the sheets
-        </span>
-      }
-    >
-      <p className="mb-4 text-sm text-muted">Same layout as your Google Sheets.</p>
-      <div className="grid gap-4 md:grid-cols-2">
-        <fieldset>
-          <legend className="mb-2 text-sm font-extrabold">Sheets</legend>
-          <div className="flex flex-wrap gap-2">
-            {KINDS.map((k) => (
-              <Chip key={k.id} on={kinds.includes(k.id)} onClick={() => setKinds(flip(kinds, k.id))}>
-                {k.label}
-              </Chip>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend className="mb-2 text-sm font-extrabold">Tabs</legend>
-          <div className="flex flex-wrap gap-2">
-            {tabs.map((t) => (
-              <Chip key={t} on={chosenTabs.includes(t)} onClick={() => setPicked(flip(chosenTabs, t))}>
-                {t}
-              </Chip>
-            ))}
-          </div>
-        </fieldset>
-      </div>
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Button icon={<FileSpreadsheet className="size-4" aria-hidden />} onClick={() => run('xlsx')} disabled={!kinds.length || !chosenTabs.length}>
-          Excel (.xlsx)
-        </Button>
-        <Button variant="soft" icon={<Sheet className="size-4" aria-hidden />} onClick={() => run('csv')} disabled={!kinds.length || !chosenTabs.length}>
-          Rows to add to Google Sheets (.csv)
-        </Button>
-        <span className="text-sm font-semibold text-muted">
-          {rows} row{rows === 1 ? '' : 's'}
-          {kinds.length > 1 || (kinds.length && chosenTabs.length > 1) ? ' · several files come in one .zip' : ''}
-        </span>
-      </div>
-      <details className="mt-4 rounded-2xl bg-paper px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-bold">How to put these into Google Sheets</summary>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
-          <li>
-            <b>Excel (.xlsx)</b>: File → Import → Upload → “Insert new sheet(s)”.
-          </li>
-          <li>
-            <b>Rows to add (.csv)</b>: open the tab, File → Import → Upload → “Append rows to current sheet”.
-          </li>
-                  </ul>
-      </details>
-    </Panel>
-  );
-}
-
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" aria-pressed={on} onClick={onClick} className={`h-10 rounded-xl px-3.5 text-sm font-bold transition ${on ? 'bg-ink text-white' : 'bg-paper text-muted hover:text-ink'}`}>
       {children}
     </button>
   );
