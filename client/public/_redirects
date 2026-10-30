@@ -1,4 +1,6 @@
-# The region link has its own page head (icon + WhatsApp/link preview), built to /region/index.html.
+# The region and accounts links have their own page head (icon + WhatsApp/link preview), built to /region/index.html and /accounts/index.html.
 /region      /region/index.html   200
 /region/*    /region/index.html   200
+/accounts    /accounts/index.html 200
+/accounts/*  /accounts/index.html 200
 /*           /index.html          200

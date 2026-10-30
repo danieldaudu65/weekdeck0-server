@@ -1,39 +1,45 @@
 import { useEffect } from 'react';
 
-/** Region icon set (see public/region-*). Swapped in while a region page is open, put back after. */
-const REGION: Record<string, string> = {
-  '/favicon.ico': '/region-favicon.ico',
-  '/favicon.svg': '/region-favicon.svg',
-  '/favicon-32x32.png': '/region-favicon-32x32.png',
-  '/favicon-16x16.png': '/region-favicon-16x16.png',
-  '/apple-touch-icon.png': '/region-apple-touch-icon.png',
-  '/site.webmanifest': '/region.webmanifest',
-};
+/** Icon sets in public/: region-* for /region, accounts-* for /accounts. */
+const icons = (prefix: string, manifest: string): Record<string, string> => ({
+  '/favicon.ico': `/${prefix}-favicon.ico`,
+  '/favicon.svg': `/${prefix}-favicon.svg`,
+  '/favicon-32x32.png': `/${prefix}-favicon-32x32.png`,
+  '/favicon-16x16.png': `/${prefix}-favicon-16x16.png`,
+  '/apple-touch-icon.png': `/${prefix}-apple-touch-icon.png`,
+  '/site.webmanifest': manifest,
+});
+const REGION = icons('region', '/region.webmanifest');
+const ACCOUNTS = icons('accounts', '/accounts.webmanifest');
 
 /**
- * Gives region pages their own tab icon, title and colour, also when someone
- * moves there inside the app (the built /region page already has them for a fresh load
- * and for WhatsApp link previews).
+ * Gives a section its own tab icon, title and colour while it's open, also when
+ * someone moves there inside the app, and puts the WeekDeck ones back after.
+ * (The built /region and /accounts pages already have them for a fresh load and
+ * for WhatsApp link previews: see vite.config.ts.)
  */
-export function useRegionHead(title = 'WeekDeck Region') {
+function usePageHead(swap: Record<string, string>, theme: string, title: string) {
   useEffect(() => {
     const undo: (() => void)[] = [];
     document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]').forEach((link) => {
       const href = link.getAttribute('href') ?? '';
-      const to = REGION[href];
+      const to = swap[href];
       if (!to) return;
       link.setAttribute('href', to);
       undo.push(() => link.setAttribute('href', href));
     });
-    const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (theme) {
-      const old = theme.content;
-      theme.content = '#2747D8';
-      undo.push(() => (theme.content = old));
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (meta) {
+      const old = meta.content;
+      meta.content = theme;
+      undo.push(() => (meta.content = old));
     }
     const oldTitle = document.title;
     document.title = title;
     undo.push(() => (document.title = oldTitle === title ? 'WeekDeck' : oldTitle));
     return () => undo.forEach((f) => f());
-  }, [title]);
+  }, [swap, theme, title]);
 }
+
+export const useRegionHead = (title = 'WeekDeck Region') => usePageHead(REGION, '#2747D8', title);
+export const useAccountsHead = (title = 'WeekDeck Accounts') => usePageHead(ACCOUNTS, '#0E7A4B', title);

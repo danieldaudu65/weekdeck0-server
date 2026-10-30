@@ -4,6 +4,7 @@
  * logins on the same device.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useAccountsHead } from '../../lib/useRegionHead';
 import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router';
 import { BookOpenCheck, Presentation, Settings, Sheet, Users } from 'lucide-react';
 import { ApiError } from '../../lib/api';
@@ -55,13 +56,7 @@ export function AccountsApp() {
     window.addEventListener(ACC_SIGNED_OUT, out);
     return () => window.removeEventListener(ACC_SIGNED_OUT, out);
   }, []);
-  useEffect(() => {
-    const old = document.title;
-    document.title = 'WeekDeck Accounts';
-    return () => {
-      document.title = old;
-    };
-  }, []);
+  useAccountsHead();
   const signIn = (t: string) => {
     setAccToken(t);
     setToken(t);
