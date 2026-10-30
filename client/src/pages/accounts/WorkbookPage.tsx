@@ -222,7 +222,7 @@ export function WorkbookPage() {
           <FileUp className="mx-auto size-10 text-blue" aria-hidden />
           <h2 className="mt-3 text-xl font-extrabold">Bring in your sheets</h2>
           <p className="mx-auto mt-1 max-w-md text-muted">
-            Upload your Workflow, New client and Infrastructure files (Excel, or Google Sheets downloaded as .xlsx). Your tabs, rows and marketers come in by themselves.
+            Upload your Excel or Google Sheets files.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Button size="lg" icon={<FileUp className="size-5" aria-hidden />} onClick={() => setImporting(true)}>
@@ -240,7 +240,7 @@ export function WorkbookPage() {
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <Stat label="Rows" value={String(totals.rows)} sub={`${tab?.name} · ${KINDS.find((k) => k.id === kind)!.short}`} />
             <Stat label="Total amount" value={`₦${showMoney(totals.amount) || '0'}`} sub={kind === 'new' ? `${totals.clients.size} new client${totals.clients.size === 1 ? '' : 's'}` : `${totals.clients.size} clients`} />
-            <Stat label="Confirmed" value={`₦${showMoney(totals.confirmed) || '0'}`} sub="counted on the slides" tone="ok" />
+            <Stat label="Confirmed" value={`₦${showMoney(totals.confirmed) || '0'}`} tone="ok" />
             <Stat label="Not confirmed yet" value={`₦${showMoney(totals.pending) || '0'}`} sub={`${totals.pendingN} payment${totals.pendingN === 1 ? '' : 's'}`} tone={totals.pendingN ? 'warn' : undefined} />
           </div>
 
@@ -271,7 +271,7 @@ export function WorkbookPage() {
             </Button>
           </div>
 
-          {q && <p className="text-sm font-semibold text-muted">{shown.length} of {inTab.length} rows match “{q}”. New rows typed below are added to the tab.</p>}
+          {q && <p className="text-sm font-semibold text-muted">{shown.length} of {inTab.length} rows match “{q}”</p>}
 
           <Grid
             key={`${kind}|${tab?.name}`}
@@ -349,7 +349,7 @@ function AddTabForm({ onSubmit, onCancel }: { onSubmit: (e: FormEvent<HTMLFormEl
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: 'ok' | 'warn' }) {
+function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'ok' | 'warn' }) {
   return (
     <div className="min-w-0 rounded-2xl bg-white px-4 py-3 shadow-sm">
       <p className="text-xs font-bold uppercase tracking-wider text-muted">{label}</p>

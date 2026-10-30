@@ -47,7 +47,7 @@ export function AccountSettingsPage() {
         </Panel>
 
         <Panel title="Tabs and branches">
-          <p className="mb-3 text-sm text-muted">Each tab belongs to a branch. The slides make one section per branch, e.g. OGBAFAGBA and OGBAFAGBA VIDCO both in FAGBA.</p>
+          <p className="mb-3 text-sm text-muted">Each tab belongs to a branch.</p>
           {tabs.length === 0 ? (
             <p className="text-sm text-muted">No tabs yet. Import your sheets or add a tab in the Workbook.</p>
           ) : (

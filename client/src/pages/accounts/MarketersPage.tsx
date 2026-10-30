@@ -115,7 +115,6 @@ export function MarketersPage() {
         <div>
           <p className="text-sm font-bold uppercase tracking-wider text-blue">Marketers</p>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight md:text-3xl">Your roster</h1>
-          <p className="text-muted">Details typed once here fill every payment row. Teams decide which slide each marketer is on; senior staff also get the Senior staff slide.</p>
         </div>
         <Button icon={<Plus className="size-4" aria-hidden />} onClick={addOne}>
           Add marketer
@@ -149,7 +148,7 @@ export function MarketersPage() {
             </button>
           }
         >
-          <p className="mb-3 text-sm text-muted">Pick the right spelling. The other spelling’s payments move to it, and WeekDeck remembers it for future imports.</p>
+          <p className="mb-3 text-sm text-muted">Pick the right spelling.</p>
           <div className="flex flex-wrap gap-2">
             {g.map((keep) => (
               <Button
@@ -378,7 +377,7 @@ function TeamLinker({ branches }: { branches: string[] }) {
       }
     >
       {!open ? (
-        <p className="text-sm text-muted">The team heads already set up their teams in WeekDeck. Link each one to put its members on the right team slide, with the team head on the Senior staff slide.</p>
+        <p className="text-sm text-muted">Link each WeekDeck team to its slide.</p>
       ) : team ? (
         <div className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-2">

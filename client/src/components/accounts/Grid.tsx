@@ -387,7 +387,7 @@ export function Grid({ columns, groups, rows, serial, flags, suggestions, onChan
         )}
       </div>
       <p className={`mt-2 min-h-5 px-1 text-xs font-semibold ${error ? 'text-bad' : focusFlag ? 'text-[#a05a00]' : 'text-muted'}`} aria-live="polite">
-        {error ?? (focusFlag ? `⚠ Row ${serial(rows[focus.r], focus.r)}: ${focusFlag}` : 'Type to fill a cell · paste straight from Excel or Google Sheets · Ctrl/⌘+D fills down · Delete clears')}
+        {error ?? (focusFlag ? `⚠ Row ${serial(rows[focus.r], focus.r)}: ${focusFlag}` : 'Paste from Excel · Ctrl+D fills down')}
       </p>
     </div>
   );

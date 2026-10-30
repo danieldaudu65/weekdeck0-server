@@ -13,7 +13,7 @@ import { SlideCanvas } from '../../components/SlideCanvas';
 import { LookPicker } from '../../components/LookPicker';
 import { Presenter } from '../../components/Presenter';
 import { layoutSlide } from '../../lib/looks';
-import { lookById } from '../../lib/templates';
+import { lookById, PALETTES, STYLES } from '../../lib/templates';
 import { accApi } from '../../lib/accounts/api';
 import { applyPrefs, buildAccountsDeck, type DeckItem, type DeckPrefs, type HistoryRow, type SummaryCell } from '../../lib/accounts/accDeck';
 import { toDeckSlide, type ImportedSlide } from '../../lib/accounts/slideImport';
@@ -190,28 +190,40 @@ export function ExportPage() {
               <ChevronRight className="size-5" aria-hidden />
             </button>
           </div>
-          <p className="mt-1 text-muted">Tick the slides you want, put them in order, then download or present.</p>
         </div>
         <Button size="lg" icon={<Play className="size-5" aria-hidden />} onClick={() => setPresenting(true)} disabled={loading || !chosen.length}>
           Present
         </Button>
       </section>
 
-      {/* What counts */}
-      <div className="grid gap-2 md:grid-cols-2">
-        {[
-          { all: false, title: 'Confirmed payments only', text: 'Only rows marked CONFIRMED count in the tables (recommended)' },
-          { all: true, title: 'Every payment recorded', text: 'Includes payments still waiting for evidence' },
-        ].map((o) => (
-          <label key={String(o.all)} className={`flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-2 ${prefs.countAll === o.all ? 'ring-blue' : 'ring-transparent'}`}>
-            <input type="radio" name="count" checked={prefs.countAll === o.all} onChange={() => choose({ ...prefs, countAll: o.all })} className="mt-1 size-4 accent-[var(--color-blue)]" />
-            <span>
-              <span className="block font-bold">{o.title}</span>
-              <span className="text-sm text-muted">{o.text}</span>
-            </span>
-          </label>
-        ))}
+      {/* What counts on the slides */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex gap-1 rounded-2xl bg-white p-1 shadow-sm" role="radiogroup" aria-label="What counts">
+          {[
+            { all: false, label: 'Confirmed only' },
+            { all: true, label: 'All payments' },
+          ].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              role="radio"
+              aria-checked={prefs.countAll === o.all}
+              onClick={() => choose({ ...prefs, countAll: o.all })}
+              className={`h-10 rounded-xl px-4 text-sm font-bold transition ${prefs.countAll === o.all ? 'bg-ink text-white' : 'text-muted hover:text-ink'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Look */}
+      <section>
+        <h2 className="mb-3 text-xl font-extrabold">
+          Pick a look <span className="text-sm font-semibold text-muted">· {STYLES.length * PALETTES.length} to choose from</span>
+        </h2>
+        <LookPicker look={look} cover={list.find((x) => x.item.slide.kind === 'cover')?.item.slide} onChange={(id) => choose({ ...prefs, lookId: id })} />
+      </section>
 
       {/* Slides */}
       <section>
@@ -324,14 +336,6 @@ export function ExportPage() {
         )}
       </section>
 
-      {/* Look */}
-      <section>
-        <h2 className="mb-3 text-xl font-extrabold">
-          Pick a look <span className="text-sm font-semibold text-muted">· 96 to choose from</span>
-        </h2>
-        <LookPicker look={look} cover={list.find((x) => x.item.slide.kind === 'cover')?.item.slide} onChange={(id) => choose({ ...prefs, lookId: id })} />
-      </section>
-
       {/* Slide actions */}
       {!loading && chosen.length > 0 && (
         <div className="sticky bottom-20 z-20 grid grid-cols-3 gap-2 rounded-3xl bg-ink p-2 shadow-[0_18px_40px_-16px_rgba(14,26,43,0.8)] md:bottom-6">
@@ -429,7 +433,7 @@ function SheetsExport() {
         </span>
       }
     >
-      <p className="mb-4 text-sm text-muted">Same columns and layout as your Google Sheets. Pick the sheets and tabs you want.</p>
+      <p className="mb-4 text-sm text-muted">Same layout as your Google Sheets.</p>
       <div className="grid gap-4 md:grid-cols-2">
         <fieldset>
           <legend className="mb-2 text-sm font-extrabold">Sheets</legend>
@@ -468,13 +472,12 @@ function SheetsExport() {
         <summary className="cursor-pointer font-bold">How to put these into Google Sheets</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
           <li>
-            <b>Excel (.xlsx)</b>: in Google Sheets choose File → Import → Upload, then “Insert new sheet(s)”. In Excel just open it.
+            <b>Excel (.xlsx)</b>: File → Import → Upload → “Insert new sheet(s)”.
           </li>
           <li>
-            <b>Rows to add (.csv)</b>: rows only, no headers, one file per tab. Open the right tab of your sheet, choose File → Import → Upload, then “Append rows to current sheet”. The rows go under your last row, column for column.
+            <b>Rows to add (.csv)</b>: open the tab, File → Import → Upload → “Append rows to current sheet”.
           </li>
-          <li>The columns are in the same order as your sheet (S/N, BRANCH, DATE …). Don’t move columns in your sheet, or the rows will land in the wrong place.</li>
-        </ul>
+                  </ul>
       </details>
     </Panel>
   );
@@ -522,7 +525,7 @@ function EarlierMonths({ summary }: { summary: SummaryCell[] }) {
     >
       <details>
         <summary className="cursor-pointer text-sm font-semibold text-muted">
-          For the January – December slide: type the totals of months before you started using WeekDeck (from your old slides). Months with rows in the workbook are filled in already.
+          Earlier months (for the year slide)
         </summary>
         <div className="mt-4 space-y-6">
           {branches.map((b) => (

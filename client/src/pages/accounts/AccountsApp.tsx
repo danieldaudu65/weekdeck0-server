@@ -232,7 +232,7 @@ function AccountsLogin({ onDone }: { onDone: (token: string) => void }) {
           <div>
             <p className="text-sm font-bold uppercase tracking-wider text-blue">WeekDeck Accounts</p>
             <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">{mode === 'login' ? 'Welcome back' : 'Set up your workbook'}</h1>
-            <p className="mt-1 text-muted">Your region’s payments sheet, marketers and monthly slides in one place.</p>
+            <p className="mt-1 text-muted">Payments, marketers and slides.</p>
           </div>
         </div>
         <Card className="p-6">
@@ -255,7 +255,7 @@ function AccountsLogin({ onDone }: { onDone: (token: string) => void }) {
             {mode === 'register' && (
               <>
                 <Field label="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Oyeyemi Ibukun" />
-                <Field label="Your region" hint="The region whose workbook you keep" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Fagba Region" />
+                <Field label="Your region" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Fagba Region" />
               </>
             )}
             <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" placeholder="you@example.com" />

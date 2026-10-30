@@ -7,6 +7,7 @@ import { useDeck } from '../lib/useDeck';
 import { mondayOf, weekNumberInMonth, weekRangeLabel } from '../lib/weeks';
 import { SlideCanvas } from '../components/SlideCanvas';
 import { LookPicker } from '../components/LookPicker';
+import { PALETTES, STYLES } from '../lib/templates';
 import { Button, Card, SectionTitle, Spinner } from '../components/ui';
 import { useToast } from '../components/Toast';
 
@@ -92,7 +93,7 @@ export function SlidesPage() {
 
       {/* Templates */}
       <section>
-        <SectionTitle>Pick a look <span className="text-sm font-semibold text-muted">· 96 to choose from</span></SectionTitle>
+        <SectionTitle>Pick a look <span className="text-sm font-semibold text-muted">· {STYLES.length * PALETTES.length} to choose from</span></SectionTitle>
         <LookPicker look={deck.look} cover={deck.slides[0]} onChange={pickLook} />
         <div className="mt-4 grid gap-2 md:grid-cols-2">
           <Toggle on={includeSummary} onChange={() => toggle('summary', includeSummary)} title="“Week at a glance” slide" text="Team total, change from last week, top performers, the week’s note" />

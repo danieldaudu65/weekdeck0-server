@@ -130,7 +130,7 @@ export function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone:
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <div>
             <h2 className="text-xl font-extrabold">Import your sheets</h2>
-            <p className="text-sm text-muted">Excel files, or Google Sheets downloaded as .xlsx or .csv. Nothing is saved until you tap Import.</p>
+            <p className="text-sm text-muted">Excel, .xlsx or .csv</p>
           </div>
           <button type="button" onClick={onClose} disabled={Boolean(busy)} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-ink/5" aria-label="Close">
             <X className="size-5" aria-hidden />
@@ -151,7 +151,7 @@ export function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone:
           >
             <FileUp className="size-8 text-blue" aria-hidden />
             <span className="font-extrabold">{files.length ? 'Add more files' : 'Choose files'}</span>
-            <span className="text-sm text-muted">e.g. OCTOBER WORKFLOW 2026, OCTOBER NEW CLIENT WORK FLOW, INFRASTRUCTURE AND OTHER FEES. You can pick several at once, and earlier months too.</span>
+            <span className="text-sm text-muted">Several at once is fine</span>
           </button>
           {reading && <p className="text-center text-sm font-semibold text-muted">Reading…</p>}
           {problems.map((p) => (
@@ -238,17 +238,17 @@ export function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone:
                 <CheckCircle2 className="size-5 text-ok" aria-hidden /> {toAdd} new row{toAdd === 1 ? '' : 's'} to add
                 {months.length > 1 ? ` across ${months.length} months` : ` to ${monthName(months[0])}`}
               </p>
-              {same > 0 && <p className="text-sm text-muted">{same} row{same === 1 ? ' is' : 's are'} already in WeekDeck and will be left as they are.</p>}
-              {toUpdate > 0 && <p className="text-sm text-muted">{toUpdate} row{toUpdate === 1 ? '' : 's'} already in WeekDeck will be brought up to date from the file.</p>}
+              {same > 0 && <p className="text-sm text-muted">{same} already in WeekDeck, left as they are.</p>}
+              {toUpdate > 0 && <p className="text-sm text-muted">{toUpdate} will be updated from the file.</p>}
               {twice > 0 && (
                 <p className="flex gap-2 text-sm font-semibold text-[#a05a00]">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {twice} row{twice === 1 ? ' appears' : 's appear'} twice in the file (same date, alert name, amount, client and CABAL ID). Both are imported and marked ⚠ so you can check them.
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {twice} row{twice === 1 ? '' : 's'} appear twice. Both come in marked ⚠.
                 </p>
               )}
               <label className="flex cursor-pointer items-start gap-2 pt-1 text-sm">
                 <input type="checkbox" checked={update} onChange={(e) => setUpdate(e.target.checked)} className="mt-0.5 size-4 accent-[var(--color-blue)]" />
                 <span>
-                  <b>Update rows already in WeekDeck</b> with what the file says (e.g. confirmations added in the sheet). Leave off if you’ve been editing in WeekDeck.
+                  <b>Update rows already in WeekDeck</b> from the file
                 </span>
               </label>
               {fresh.length > 0 && (
@@ -258,8 +258,7 @@ export function ImportDialog({ onClose, onDone }: { onClose: () => void; onDone:
                     <b>
                       <Users className="mr-1 inline size-4" aria-hidden />
                       Add {fresh.length} marketer{fresh.length === 1 ? '' : 's'} to your roster
-                    </b>{' '}
-                    with their supervisor, designation, account and spouse details from their latest row.
+                    </b>
                   </span>
                 </label>
               )}

@@ -1,6 +1,6 @@
 /**
  * The looks a deck can take: a STYLE (the layout: where things sit, shapes,
- * fonts) combined with a PALETTE (the colours). 8 styles × 12 palettes.
+ * fonts) combined with a PALETTE (the colours). 8 styles × 20 palettes.
  * Hex colours are written without "#" (the PowerPoint builder needs it that way).
  */
 export interface Theme {
@@ -36,6 +36,15 @@ export const PALETTES: Theme[] = [
   { id: 'rose', name: 'Rose & Navy', dark: false, bg: 'FFFFFF', ink: '22233A', muted: '64657E', primary: 'D6336C', primaryInk: 'FFFFFF', accent: '2B2D42', accentInk: 'FFFFFF', highlight: 'C2255C', surface: 'FDECF2', line: 'F6D0DE', coverBg: 'B8285A', coverInk: 'FFFFFF', coverMuted: 'F7CFDD' },
   { id: 'mono', name: 'Black & Yellow', dark: false, bg: 'FFFFFF', ink: '111111', muted: '5C5C5C', primary: '111111', primaryInk: 'FFFFFF', accent: 'FFD400', accentInk: '111111', highlight: '111111', surface: 'F2F2F2', line: 'DDDDDD', coverBg: '111111', coverInk: 'FFFFFF', coverMuted: 'C8C8C8' },
   { id: 'sky', name: 'Fresh Sky', dark: false, bg: 'FFFFFF', ink: '0C2340', muted: '51667F', primary: '0284C7', primaryInk: 'FFFFFF', accent: '22C55E', accentInk: '052E16', highlight: '0369A1', surface: 'E0F2FE', line: 'C3E3F7', coverBg: '0369A1', coverInk: 'FFFFFF', coverMuted: 'CBE8FA' },
+  // More colour: bolder pairs, and three dark sets for big screens.
+  { id: 'estate', name: 'Estate Green', dark: false, bg: 'FFFFFF', ink: '0F2418', muted: '4F6457', primary: '15803D', primaryInk: 'FFFFFF', accent: 'FACC15', accentInk: '1F1A00', highlight: '15803D', surface: 'ECFDF3', line: 'C9EBD5', coverBg: '14532D', coverInk: 'FFFFFF', coverMuted: 'BBF7D0' },
+  { id: 'lagoon', name: 'Lagoon Blue', dark: false, bg: 'FFFFFF', ink: '0A1F33', muted: '4C6278', primary: '0062A8', primaryInk: 'FFFFFF', accent: '00C2E0', accentInk: '002A33', highlight: '0062A8', surface: 'E6F4FB', line: 'C4E2F2', coverBg: '023E7D', coverInk: 'FFFFFF', coverMuted: 'BDE3FA' },
+  { id: 'berry', name: 'Berry & Amber', dark: false, bg: 'FFFFFF', ink: '2A0E1C', muted: '6E5262', primary: '9D174D', primaryInk: 'FFFFFF', accent: 'F59E0B', accentInk: '2A1600', highlight: '9D174D', surface: 'FCEEF4', line: 'F3CFDF', coverBg: '831843', coverInk: 'FFFFFF', coverMuted: 'FBCFE8' },
+  { id: 'violet', name: 'Electric Violet', dark: false, bg: 'FFFFFF', ink: '1E1238', muted: '5F5578', primary: '6D28D9', primaryInk: 'FFFFFF', accent: '22D3EE', accentInk: '062A30', highlight: '6D28D9', surface: 'F3EEFE', line: 'DED2FA', coverBg: '4C1D95', coverInk: 'FFFFFF', coverMuted: 'DDD6FE' },
+  { id: 'terracotta', name: 'Terracotta & Teal', dark: false, bg: 'FFFFFF', ink: '2A160D', muted: '6D564A', primary: 'B4532A', primaryInk: 'FFFFFF', accent: '2A9D8F', accentInk: 'FFFFFF', highlight: '9A3F1C', surface: 'FBEFE8', line: 'F0D6C7', coverBg: '7C2D12', coverInk: 'FFFFFF', coverMuted: 'FED7C3' },
+  { id: 'neon', name: 'Neon Night', dark: true, bg: '0B1020', ink: 'EEF2FF', muted: 'A3ACC9', primary: '8B5CF6', primaryInk: 'FFFFFF', accent: '22D3EE', accentInk: '04232A', highlight: '22D3EE', surface: '161D36', line: '27304F', coverBg: '070B18', coverInk: 'FFFFFF', coverMuted: 'B7BEDA' },
+  { id: 'crimson', name: 'Crimson Night', dark: true, bg: '1A0B0E', ink: 'FDF2F2', muted: 'C9A9AE', primary: 'EF4444', primaryInk: '1A0B0E', accent: 'FBBF24', accentInk: '1A0B0E', highlight: 'FBBF24', surface: '2A1418', line: '45232A', coverBg: '12070A', coverInk: 'FFFFFF', coverMuted: 'E3C3C8' },
+  { id: 'forest', name: 'Forest Gold', dark: true, bg: '0C1A12', ink: 'ECFDF3', muted: 'A3BFAE', primary: 'FACC15', primaryInk: '0C1A12', accent: '34D399', accentInk: '062016', highlight: 'FACC15', surface: '14281C', line: '22402D', coverBg: '07120C', coverInk: 'FFFFFF', coverMuted: 'B6D3C1' },
 ];
 
 export interface StyleInfo {

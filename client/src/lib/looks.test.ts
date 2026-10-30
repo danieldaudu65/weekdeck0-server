@@ -30,9 +30,9 @@ const week: Week = {
 };
 
 describe('looks', () => {
-  it('has 8 styles and 12 palettes', () => {
+  it('has 8 styles and 20 palettes', () => {
     expect(STYLES).toHaveLength(8);
-    expect(PALETTES).toHaveLength(12);
+    expect(PALETTES).toHaveLength(20);
   });
 
   it('reads old and new saved ids', () => {

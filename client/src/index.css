@@ -85,6 +85,17 @@ select {
     transform: none;
   }
 }
+/* Present mode: table rows slide in one after another */
+@keyframes wd-row {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes wd-grow {
   from {
     transform: scaleX(0);

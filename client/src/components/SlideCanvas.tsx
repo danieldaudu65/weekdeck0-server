@@ -23,8 +23,10 @@ function CountUp({ text, delay }: { text: string; delay: number }) {
     const tick = (now: number) => {
       const p = Math.min(1, Math.max(0, (now - start) / 1200));
       const eased = 1 - (1 - p) ** 3;
+      // The last frame is the real text, so "3,333,694.70" doesn't end as "3,333,695".
+      if (p >= 1) return setShown(text);
       setShown(`${m[1]}${Math.round(target * eased).toLocaleString('en-US')}${m[3]}`);
-      if (p < 1) raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -39,6 +41,10 @@ function entrance(s: Shape, i: number): CSSProperties {
   if (s.type === 'rect' && s.anim === 'grow') return { animation: `wd-grow 900ms cubic-bezier(.2,.8,.2,1) ${delay + 250}ms both`, transformOrigin: 'left center' };
   return { animation: `wd-in 520ms cubic-bezier(.2,.8,.2,1) ${delay}ms both` };
 }
+
+/** Present mode, tables: the header drops in, then each row slides in after the one above, then the TOTAL row. */
+const rowIn = (row: number, base: number): CSSProperties => ({ animation: `wd-row 480ms cubic-bezier(.2,.8,.2,1) ${base + 180 + row * 90}ms both` });
+const isFigure = (t: string) => /^[₦]?-?\d[\d,]*(\.\d+)?%?$/.test(t.trim());
 
 function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: boolean; index?: number }) {
   const box: CSSProperties = { position: 'absolute', left: s.x, top: s.y, ...(animate ? entrance(s, index) : {}) };
@@ -94,7 +100,7 @@ function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: bool
             ))}
           </colgroup>
           <thead>
-            <tr>
+            <tr style={animate ? rowIn(-1, Math.min(1400, index * 32)) : undefined}>
               {s.head.map((h, i) => (
                 <th key={i} style={cell({ background: hex(s.headFill), color: hex(s.headInk), textAlign: i === 0 ? 'left' : 'center', fontWeight: 700 })}>
                   {h}
@@ -104,18 +110,18 @@ function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: bool
           </thead>
           <tbody>
             {s.rows.map((r, ri) => (
-              <tr key={ri}>
+              <tr key={ri} style={animate ? rowIn(ri, Math.min(1400, index * 32)) : undefined}>
                 {r.map((c, ci) => (
                   <td key={ci} style={cell({ background: hex(ri % 2 ? s.stripe : s.bg), textAlign: ci === 0 ? 'left' : 'center', fontWeight: s.boldEdges !== false && (ci === 0 || ci === r.length - 1) ? 700 : 400 })}>
-                    {c}
+                    {animate && ci > 0 && isFigure(c) ? <CountUp text={c} delay={Math.min(1400, index * 32) + 260 + ri * 90} /> : c}
                   </td>
                 ))}
               </tr>
             ))}
-            <tr>
+            <tr style={animate ? rowIn(s.rows.length + 1, Math.min(1400, index * 32)) : undefined}>
               {s.total.map((c, ci) => (
                 <td key={ci} style={cell({ background: hex(s.totalFill), color: hex(s.totalInk), textAlign: ci === 0 ? 'left' : 'center', fontWeight: 700 })}>
-                  {c}
+                  {animate && ci > 0 && isFigure(c) ? <CountUp text={c} delay={Math.min(1400, index * 32) + 260 + (s.rows.length + 1) * 90} /> : c}
                 </td>
               ))}
             </tr>

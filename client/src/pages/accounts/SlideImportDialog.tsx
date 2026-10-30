@@ -164,7 +164,7 @@ export function SlideImportDialog({ onClose, onDone }: { onClose: () => void; on
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <div>
             <h2 className="text-xl font-extrabold">Import slides</h2>
-            <p className="text-sm text-muted">Your own slides: PowerPoint, PDF, Excel, Word or pictures. WeekDeck checks every slide first, then you can edit and restyle them.</p>
+            <p className="text-sm text-muted">Checked first, then yours to edit and restyle.</p>
           </div>
           <button type="button" onClick={onClose} disabled={Boolean(busy)} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-ink/5" aria-label="Close">
             <X className="size-5" aria-hidden />
@@ -186,7 +186,7 @@ export function SlideImportDialog({ onClose, onDone }: { onClose: () => void; on
             >
               <FileUp className="size-8 text-blue" aria-hidden />
               <span className="font-extrabold">{reading ? 'Reading…' : 'Choose your slides'}</span>
-              <span className="text-sm text-muted">PowerPoint, PDF (also from Google Slides), Excel, Word, LibreOffice, or photos and screenshots. Several at once is fine. Titles and tables are read and checked; photos come in as picture slides.</span>
+              <span className="text-sm text-muted">PowerPoint, PDF, Excel, Word or photos</span>
             </button>
           ) : (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -240,11 +240,11 @@ export function SlideImportDialog({ onClose, onDone }: { onClose: () => void; on
                 {toFix.length ? <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden /> : <CheckCircle2 className="mt-0.5 size-5 shrink-0" aria-hidden />}
                 <p className="text-sm font-bold">
                   {toFix.length
-                    ? `WeekDeck found ${toFix.length} thing${toFix.length === 1 ? '' : 's'} to correct. ${ticked} ${ticked === 1 ? 'is' : 'are'} ticked and will be fixed when you import; untick any you want to keep as they are.`
+                    ? `${toFix.length} thing${toFix.length === 1 ? '' : 's'} to correct · ${ticked} ticked`
                     : kinds!.table
-                      ? 'Every total adds up and every name matches. Nothing to correct.'
+                      ? 'All totals and names check out.'
                       : 'No tables to check in these slides.'}
-                  {payments!.some((p) => (p.amount ?? 0) > 0) ? '' : ` ${monthName(month)} has no rows in your workbook, so figures were checked against each other only.`}
+                  {payments!.some((p) => (p.amount ?? 0) > 0) ? '' : ` (no ${monthName(month)} rows in your workbook)`}
                 </p>
               </div>
 
@@ -307,7 +307,7 @@ export function SlideImportDialog({ onClose, onDone }: { onClose: () => void; on
                         <History className="mr-1 inline size-4" aria-hidden />
                         Fill “Earlier months”
                       </b>{' '}
-                      with {history.length} month{history.length === 1 ? '' : 's'} from the January – December table ({[...new Set(history.map((h) => h.branch))].join(', ')}), so next month’s year slide has them.
+                      · {history.length} month{history.length === 1 ? '' : 's'}
                     </span>
                   </label>
                 )}
@@ -319,8 +319,8 @@ export function SlideImportDialog({ onClose, onDone }: { onClose: () => void; on
                         <Users className="mr-1 inline size-4" aria-hidden />
                         Set teams on your roster
                       </b>{' '}
-                      from the team slides: {teamCount} team{teamCount === 1 ? '' : 's'}, {teamEntries.length} marketers, senior staff marked
-                      {newPeople ? `, ${newPeople} new to the roster` : ''}.
+                      · {teamCount} team{teamCount === 1 ? '' : 's'}, {teamEntries.length} marketers
+                      {newPeople ? ` (${newPeople} new)` : ''}
                     </span>
                   </label>
                 )}
