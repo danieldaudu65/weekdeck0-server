@@ -295,7 +295,44 @@ function cleanImported(raw) {
   }
 }
 
+/**
+ * A month's report Excel, as read in the browser (TEAM'S REPORT of each
+ * branch file): one entry per branch, the marketers in the file's order.
+ */
+const MAX_REPORT_BRANCHES = 10;
+const MAX_REPORT_ROWS = 400;
+function cleanReport(raw) {
+  if (!Array.isArray(raw)) throw new ValidationError('The report must be a list of branches.');
+  if (raw.length > MAX_REPORT_BRANCHES) throw new ValidationError(`At most ${MAX_REPORT_BRANCHES} branches a month.`);
+  const seen = new Set();
+  const out = [];
+  for (const b of raw) {
+    const branch = text(b && b.branch, 40).toUpperCase();
+    if (!branch) throw new ValidationError('Every report needs its branch.');
+    if (seen.has(branch)) continue;
+    seen.add(branch);
+    const rows = Array.isArray(b.rows) ? b.rows.slice(0, MAX_REPORT_ROWS) : [];
+    out.push({
+      branch,
+      fileName: text(b.fileName, 120),
+      rows: rows
+        .map((r) => ({
+          name: text(r && r.name, 120).toUpperCase(),
+          designation: text(r && r.designation, 40).toUpperCase(),
+          land: Math.max(0, num(r && r.land) || 0),
+          house: Math.max(0, num(r && r.house) || 0),
+          infra: Math.max(0, num(r && r.infra) || 0),
+          nc: Math.max(0, Math.round(num(r && r.nc) || 0)),
+          others: Boolean(r && r.others),
+        }))
+        .filter((r) => r.name),
+    });
+  }
+  return out;
+}
+
 module.exports = {
+  cleanReport,
   KINDS,
   cleanImported,
   FIELDS,

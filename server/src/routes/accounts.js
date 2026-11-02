@@ -14,6 +14,7 @@ const Accountant = require('../models/Accountant');
 const Payment = require('../models/Payment');
 const Marketer = require('../models/Marketer');
 const ImportedDeck = require('../models/ImportedDeck');
+const MonthReport = require('../models/MonthReport');
 const Team = require('../models/Team');
 const asyncHandler = require('../utils/asyncHandler');
 const { signAccountantToken } = require('../utils/tokens');
@@ -225,6 +226,48 @@ router.put(
     const fileName = String(b.fileName || '').slice(0, 120);
     await ImportedDeck.updateOne(filter, { $set: { slides, fileName } }, { upsert: true });
     res.json({ month, fileName, slides });
+  }),
+);
+
+/* ------------------------------------------------------------------ report Excel */
+
+/** A month's report (each branch's TEAM'S REPORT); empty when none was uploaded. */
+router.get(
+  '/reports',
+  asyncHandler(async (req, res) => {
+    const month = A.cleanMonth(req.query.month);
+    const doc = await MonthReport.findOne({ accountant: req.accountant._id, month }).lean();
+    res.json({ month, branches: doc ? doc.branches : [], updatedAt: doc ? doc.updatedAt : null });
+  }),
+);
+
+/** Months that have a report, newest first. */
+router.get(
+  '/reports/months',
+  asyncHandler(async (req, res) => {
+    const docs = await MonthReport.find({ accountant: req.accountant._id }).select('month branches.branch').sort({ month: -1 }).lean();
+    res.json({ months: docs.map((d) => ({ month: d.month, branches: (d.branches || []).map((b) => b.branch) })) });
+  }),
+);
+
+/** Save a month's report. Branches sent replace the same branches; `remove` takes branches away. */
+router.put(
+  '/reports',
+  asyncHandler(async (req, res) => {
+    const b = req.body || {};
+    const month = A.cleanMonth(b.month);
+    const incoming = A.cleanReport(b.branches || []);
+    const remove = new Set((Array.isArray(b.remove) ? b.remove : []).map((x) => String(x).toUpperCase().trim()));
+    const filter = { accountant: req.accountant._id, month };
+    const doc = await MonthReport.findOne(filter).lean();
+    const keep = (doc ? doc.branches : []).filter((x) => !remove.has(x.branch) && !incoming.some((y) => y.branch === x.branch));
+    const branches = [...keep, ...incoming];
+    if (!branches.length) {
+      await MonthReport.deleteOne(filter);
+      return res.json({ month, branches: [] });
+    }
+    await MonthReport.updateOne(filter, { $set: { branches } }, { upsert: true });
+    res.json({ month, branches });
   }),
 );
 

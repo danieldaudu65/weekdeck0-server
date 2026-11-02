@@ -1,12 +1,14 @@
 /**
- * Export: the month's slides (pick which, put them in order, rename, pick a
- * look → PowerPoint / PDF / present) and the sheets (pick tabs → Excel, or
- * rows for Google Sheets).
+ * The month's slides: pick which, put them in order, rename, pick a look →
+ * PowerPoint / PDF / present. Made from the accountant's report Excel (the
+ * Slides page), or from the workbook when WORKBOOK_ON.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileUp, History, Pencil, Play, Presentation, Printer, RotateCcw, SquarePen } from 'lucide-react';
-import { useAccounts, Panel } from './AccountsApp';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreadsheet, FileUp, History, Pencil, Play, Presentation, Printer, RotateCcw, SquarePen } from 'lucide-react';
+import { useAccounts, Panel, WORKBOOK_ON } from './AccountsApp';
+import { ReportImportDialog } from './ReportImportDialog';
+import { buildReportDeck, branchTotals, type SavedBranch } from '../../lib/accounts/reportDeck';
 import { Button, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { SlideCanvas } from '../../components/SlideCanvas';
@@ -36,6 +38,30 @@ export function ExportPage() {
   const [uploaded, setUploaded] = useState<{ fileName: string; slides: ImportedSlide[] } | null>(null);
   const [importingSlides, setImportingSlides] = useState(false);
   const [editSlide, setEditSlide] = useState<string | null>(null);
+  // The month's report Excel (when the workbook is off).
+  const [report, setReport] = useState<SavedBranch[] | null>(WORKBOOK_ON ? [] : null);
+  const [uploadingReport, setUploadingReport] = useState(false);
+  const loadReport = () =>
+    accApi
+      .report(month)
+      .then((r) => setReport(r.branches))
+      .catch(() => setReport([]));
+  useEffect(() => {
+    if (WORKBOOK_ON) return;
+    setReport(null);
+    void loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
+  const removeBranch = async (branch: string) => {
+    if (!window.confirm(`Remove ${branch} from ${monthName(month)}?`)) return;
+    try {
+      const r = await accApi.saveReport(month, [], [branch]);
+      setReport(r.branches);
+      await saveMe({ history: acc.history.filter((h) => !(h.branch === branch && h.month === month)) });
+    } catch {
+      toast('Couldn’t remove it. Try again.', 'bad');
+    }
+  };
   useEffect(() => {
     let alive = true;
     setUploaded(null);
@@ -62,6 +88,10 @@ export function ExportPage() {
   // Save whatever is waiting first, so the totals include the latest typing.
   useEffect(() => {
     let alive = true;
+    if (!WORKBOOK_ON) {
+      setSummary([]);
+      return;
+    }
     setSummary(null);
     ledger
       .flush()
@@ -86,7 +116,9 @@ export function ExportPage() {
 
   const generated = useMemo(
     () =>
-      !ledger.rows.length
+      !WORKBOOK_ON
+        ? buildReportDeck({ region: acc.region, month, branches: report ?? [], marketers, history: acc.history })
+        : !ledger.rows.length
         ? [] // no workbook rows this month: only uploaded slides (if any)
         : buildAccountsDeck({
         region: acc.region,
@@ -98,7 +130,7 @@ export function ExportPage() {
         history: acc.history,
         countAll: prefs.countAll,
       }),
-    [acc.region, acc.tabs, acc.history, month, ledger.rows, marketers, summary, prefs.countAll],
+    [acc.region, acc.tabs, acc.history, month, ledger.rows, marketers, summary, prefs.countAll, report],
   );
   const uploadedGroup = `UPLOADED${uploaded?.fileName ? ` · ${uploaded.fileName.replace(/\.pptx$/i, '')}` : ''}`;
   const items = useMemo(() => {
@@ -158,7 +190,7 @@ export function ExportPage() {
     navigate('/accounts/print');
   };
 
-  const loading = ledger.loading || summary === null || uploaded === null;
+  const loading = (WORKBOOK_ON && ledger.loading) || summary === null || uploaded === null || report === null;
   /** Tick or untick every slide of a section. */
   const setGroup = (group: string, on: boolean) => {
     const its = list.filter((x) => x.item.group === group).map((x) => x.item);
@@ -178,7 +210,7 @@ export function ExportPage() {
     <div className="min-w-0 space-y-8">
       <section className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-bold uppercase tracking-wider text-blue">Export</p>
+          <p className="text-sm font-bold uppercase tracking-wider text-blue">{WORKBOOK_ON ? 'Export' : 'Monthly slides'}</p>
           <div className="mt-1 flex items-center gap-2">
             <button type="button" aria-label="Month before" onClick={() => setMonth(addMonths(month, -1))} className="grid size-10 place-items-center rounded-xl bg-white shadow-sm active:scale-95">
               <ChevronLeft className="size-5" aria-hidden />
@@ -195,6 +227,7 @@ export function ExportPage() {
       </section>
 
       {/* What counts on the slides */}
+      {WORKBOOK_ON && (
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex gap-1 rounded-2xl bg-white p-1 shadow-sm" role="radiogroup" aria-label="What counts">
           {[
@@ -214,6 +247,29 @@ export function ExportPage() {
           ))}
         </div>
       </div>
+      )}
+
+      {/* The report Excel */}
+      {!WORKBOOK_ON && (
+        <section className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-3 shadow-sm">
+          {(report ?? []).map((b) => {
+            const t = branchTotals(b);
+            return (
+              <span key={b.branch} className="inline-flex min-w-0 items-center gap-2 rounded-xl bg-paper py-2 pl-3 pr-2 text-sm">
+                <FileSpreadsheet className="size-4 shrink-0 text-ok" aria-hidden />
+                <span className="truncate font-extrabold">{b.branch}</span>
+                <span className="figures text-muted">₦{showMoney(t.land + t.infra)}</span>
+                <button type="button" onClick={() => void removeBranch(b.branch)} className="rounded-lg px-1.5 text-muted hover:text-bad" aria-label={`Remove ${b.branch}`}>
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <Button size="sm" variant={report?.length ? 'soft' : 'primary'} icon={<FileUp className="size-4" aria-hidden />} onClick={() => setUploadingReport(true)} className="ml-auto">
+            {report?.length ? 'Upload again' : 'Upload Excel'}
+          </Button>
+        </section>
+      )}
 
       {/* Look */}
       <section>
@@ -245,7 +301,15 @@ export function ExportPage() {
         ) : !list.length ? (
           <Panel>
             <p className="py-6 text-center text-muted">
-              No rows in {monthName(month)} yet. Import or type them in the Workbook, or{' '}
+              {WORKBOOK_ON ? `No rows in ${monthName(month)} yet. Import or type them in the Workbook, or ` : (
+                <>
+                  No report for {monthName(month)} yet.{' '}
+                  <button type="button" className="font-bold text-blue" onClick={() => setUploadingReport(true)}>
+                    Upload your Excel
+                  </button>
+                  , or{' '}
+                </>
+              )}
               <button type="button" className="font-bold text-blue" onClick={() => setImportingSlides(true)}>
                 import a deck you already have
               </button>
@@ -352,6 +416,16 @@ export function ExportPage() {
 
       <EarlierMonths summary={summary ?? []} />
 
+      {uploadingReport && (
+        <ReportImportDialog
+          onClose={() => setUploadingReport(false)}
+          onDone={(m) => {
+            setUploadingReport(false);
+            if (m !== month) setMonth(m);
+            else void loadReport();
+          }}
+        />
+      )}
       {presenting && <Presenter slides={laidChosen} title={deckTitle} onExit={() => setPresenting(false)} />}
       {importingSlides && (
         <SlideImportDialog
@@ -455,6 +529,10 @@ function EarlierMonths({ summary }: { summary: SummaryCell[] }) {
                         {fromBook && (fromBook.all.land || fromBook.all.infra) ? (
                           <td colSpan={3} className="py-1.5 text-muted">
                             <Eye className="mr-1 inline size-4" aria-hidden /> From the workbook: ₦{showMoney(fromBook.confirmed.land + fromBook.confirmed.infra)} confirmed
+                          </td>
+                        ) : !WORKBOOK_ON && m === month && h ? (
+                          <td colSpan={3} className="py-1.5 text-muted">
+                            <Eye className="mr-1 inline size-4" aria-hidden /> From your Excel: ₦{showMoney((h.land ?? 0) + (h.infra ?? 0))}
                           </td>
                         ) : m >= month ? (
                           <td colSpan={3} className="py-1.5 text-muted/70">

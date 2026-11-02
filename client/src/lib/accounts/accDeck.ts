@@ -84,8 +84,8 @@ export interface DeckInput {
 const fmt2 = new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** 3333694.7 → "3,333,694.70"; 0 → "-" (the way their tables show it). */
 export const money = (n: number) => (Math.abs(n) < 0.005 ? '-' : fmt2.format(n));
-const count = (n: number) => (n ? String(n) : '-');
-const naira = (n: number) => `₦${new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 }).format(Math.round(n))}`;
+export const count = (n: number) => (n ? String(n) : '-');
+export const naira = (n: number) => `₦${new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 }).format(Math.round(n))}`;
 
 interface Stat {
   inflow: number;
@@ -100,7 +100,7 @@ const add = (s: Stat, p: Payment) => {
   if (p.kind === 'new' && nameKey(p.clientName)) s.nc.add(nameKey(p.clientName));
 };
 
-const TABLE_HEAD = ['MARKETERS NAME', 'DESIGNATION', 'INFLOW', 'INFRAS', 'TOTAL', 'NC'];
+export const TABLE_HEAD = ['MARKETERS NAME', 'DESIGNATION', 'INFLOW', 'INFRAS', 'TOTAL', 'NC'];
 const ROWS_PER_SLIDE = 13;
 
 interface Person {
@@ -123,7 +123,7 @@ function personTable(people: Person[], stats: Map<string, Stat>): { rows: string
 }
 
 /** A long table becomes several slides ("(1/2)", "(2/2)"); the total is on the last. */
-function tableSlides(id: string, group: string, label: string, title: string, subtitle: string, table: DeckTable, extra = false): DeckItem[] {
+export function tableSlides(id: string, group: string, label: string, title: string, subtitle: string, table: DeckTable, extra = false): DeckItem[] {
   if (table.rows.length <= ROWS_PER_SLIDE) return [{ id, group, label, extra, slide: { kind: 'table', title, subtitle, table } }];
   const parts = Math.ceil(table.rows.length / ROWS_PER_SLIDE);
   return Array.from({ length: parts }, (_, i) => ({

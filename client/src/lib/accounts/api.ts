@@ -3,6 +3,7 @@ import { api, ApiError } from '../api';
 import type { Payment } from './columns';
 import type { DeckPrefs, HistoryRow, Marketer, SummaryCell } from './accDeck';
 import type { ImportedSlide } from './slideImport';
+import type { SavedBranch } from './reportDeck';
 
 const KEY = 'weekdeck.accountsToken';
 
@@ -80,6 +81,9 @@ export const accApi = {
   merge: (from: string[], into: string) => send<{ moved: number; marketers: Marketer[] }>('POST', '/marketers/merge', { from, into }),
   imported: (month: string) => call<{ month: string; fileName: string; slides: ImportedSlide[] }>(`/imported?month=${month}`),
   saveImported: (month: string, slides: ImportedSlide[], fileName = '') => send<{ month: string; fileName: string; slides: ImportedSlide[] }>('PUT', '/imported', { month, slides, fileName }),
+  report: (month: string) => call<{ month: string; branches: SavedBranch[]; updatedAt: string | null }>(`/reports?month=${month}`),
+  reportMonths: () => call<{ months: { month: string; branches: string[] }[] }>('/reports/months'),
+  saveReport: (month: string, branches: SavedBranch[], remove: string[] = []) => send<{ month: string; branches: SavedBranch[] }>('PUT', '/reports', { month, branches, remove }),
   teams: (q = '') => call<{ teams: WeekDeckTeam[] }>(`/teams?q=${encodeURIComponent(q)}`),
 };
 

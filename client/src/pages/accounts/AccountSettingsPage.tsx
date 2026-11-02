@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { KeyRound, LogOut, Save, Trash2 } from 'lucide-react';
-import { useAccounts, Panel } from './AccountsApp';
+import { useAccounts, Panel, WORKBOOK_ON } from './AccountsApp';
 import { Button, Field } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { ApiError } from '../../lib/api';
@@ -46,6 +46,7 @@ export function AccountSettingsPage() {
           </div>
         </Panel>
 
+        {WORKBOOK_ON && (
         <Panel title="Tabs and branches">
           <p className="mb-3 text-sm text-muted">Each tab belongs to a branch.</p>
           {tabs.length === 0 ? (
@@ -78,6 +79,7 @@ export function AccountSettingsPage() {
             </ul>
           )}
         </Panel>
+        )}
         <Button type="submit" loading={busy} icon={<Save className="size-4" aria-hidden />}>
           Save
         </Button>

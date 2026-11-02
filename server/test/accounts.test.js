@@ -101,3 +101,16 @@ test('picture slides keep a real picture, within limits', () => {
   assert.throws(() => A.cleanImported(Array(9).fill({ kind: 'picture', image: 'data:image/jpeg;base64,' + 'A'.repeat(1_400_000) })));
   assert.equal(A.cleanImported([{ kind: 'table', image: jpeg }])[0].image, undefined);
 });
+
+test('report Excel figures are tidied and limited', () => {
+  const [b] = A.cleanReport([
+    { branch: ' fagba ', fileName: 'FAGBA.xlsx', rows: [{ name: ' kenneth  ipogah ', designation: 'ddsm', land: '3,333,694.70', house: '', infra: 2195655, nc: '1.4', others: 0, junk: 1 }, { name: '' }] },
+    { branch: 'FAGBA', rows: [] },
+  ]);
+  assert.equal(b.branch, 'FAGBA');
+  assert.deepEqual(b.rows, [{ name: 'KENNETH IPOGAH', designation: 'DDSM', land: 3333694.7, house: 0, infra: 2195655, nc: 1, others: false }]);
+  assert.equal(A.cleanReport([{ branch: 'A', rows: [{ name: 'X', land: -5 }] }])[0].rows[0].land, 0);
+  assert.throws(() => A.cleanReport([{ rows: [] }]));
+  assert.throws(() => A.cleanReport('nope'));
+  assert.throws(() => A.cleanReport(Array.from({ length: 11 }, (_, i) => ({ branch: `B${i}` }))));
+});

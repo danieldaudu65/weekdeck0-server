@@ -125,9 +125,9 @@ function Provider({ initial, initialMarketers, onSignOut }: { initial: Accountan
       <Routes>
         <Route path="print" element={<AccountsPrintPage />} />
         <Route element={<AccountsShell />}>
-          <Route index element={<WorkbookPage />} />
+          <Route index element={WORKBOOK_ON ? <WorkbookPage /> : <ExportPage />} />
           <Route path="marketers" element={<MarketersPage />} />
-          <Route path="export" element={<ExportPage />} />
+          <Route path="export" element={WORKBOOK_ON ? <ExportPage /> : <Navigate to="/accounts" replace />} />
           <Route path="settings" element={<AccountSettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/accounts" replace />} />
@@ -136,12 +136,25 @@ function Provider({ initial, initialMarketers, onSignOut }: { initial: Accountan
   );
 }
 
-const tabs = [
-  { to: '/accounts', label: 'Workbook', icon: Sheet },
-  { to: '/accounts/marketers', label: 'Marketers', icon: Users },
-  { to: '/accounts/export', label: 'Export', icon: Presentation },
-  { to: '/accounts/settings', label: 'Account', icon: Settings },
-];
+/**
+ * The Google-Sheets-style workbook (payments typed or imported row by row).
+ * Off for now: the monthly slides are made from the accountant's report Excel
+ * instead (Slides page). Turn it back on here; nothing else needs changing.
+ */
+export const WORKBOOK_ON = false;
+
+const tabs = WORKBOOK_ON
+  ? [
+      { to: '/accounts', label: 'Workbook', icon: Sheet },
+      { to: '/accounts/marketers', label: 'Marketers', icon: Users },
+      { to: '/accounts/export', label: 'Export', icon: Presentation },
+      { to: '/accounts/settings', label: 'Account', icon: Settings },
+    ]
+  : [
+      { to: '/accounts', label: 'Slides', icon: Presentation },
+      { to: '/accounts/marketers', label: 'Marketers', icon: Users },
+      { to: '/accounts/settings', label: 'Account', icon: Settings },
+    ];
 
 /** Frame: top bar with tabs on desktop, bottom tabs on phones. Wider than the team app: it holds a sheet. */
 function AccountsShell() {
@@ -176,7 +189,7 @@ function AccountsShell() {
         <Outlet />
       </main>
       <nav className="no-print safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur md:hidden" aria-label="Accounts">
-        <div className="grid grid-cols-4">
+        <div className={`grid ${tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {tabs.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} end={to === '/accounts'} className={({ isActive }) => `flex h-16 flex-col items-center justify-center gap-1 text-xs font-bold ${isActive ? 'text-blue' : 'text-muted'}`}>
               <Icon className="size-6" aria-hidden />
