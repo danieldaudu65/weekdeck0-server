@@ -157,7 +157,7 @@ function toImageData(img: PdfImage): ImageData {
 export async function readPdfPages(
   file: File,
   maxPages = 60,
-): Promise<{ pages: SlideContent[]; pieces: PdfTextPiece[][]; letters: number; total: number; picture: (n: number) => Promise<{ image: string; ratio: number }>; close: () => void }> {
+): Promise<{ pages: SlideContent[]; pieces: PdfTextPiece[][]; letters: number; total: number; picture: (n: number) => Promise<{ image: string; ratio: number }>; hasImage: (n: number) => Promise<boolean>; close: () => void }> {
   if (file.size > 60 * 1024 * 1024) throw new ImportError('That PDF is over 60 MB. Try saving it again with smaller pictures.');
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   let doc: pdfjs.PDFDocumentProxy;
@@ -199,5 +199,11 @@ export async function readPdfPages(
     await page.render({ canvasContext: ctx, viewport, canvas } as unknown as Parameters<typeof page.render>[0]).promise;
     return { image: canvas.toDataURL('image/jpeg', 0.78), ratio: canvas.width / canvas.height };
   };
-  return { pages, pieces: allPieces, letters, total: doc.numPages, picture, close: () => void task.destroy() };
+  /** Does page n draw a picture (a photo, a scan, a chart saved as an image)? */
+  const hasImage = async (n: number) => {
+    const ops = await (await doc.getPage(n)).getOperatorList();
+    const want = new Set([pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintImageMaskXObject].filter((x) => typeof x === 'number'));
+    return ops.fnArray.some((f: number) => want.has(f));
+  };
+  return { pages, pieces: allPieces, letters, total: doc.numPages, picture, hasImage, close: () => void task.destroy() };
 }

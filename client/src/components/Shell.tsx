@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router';
-import { CalendarDays, Play, Presentation, Users } from 'lucide-react';
+import { CalendarDays, Layers, Play, Presentation, Users } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { Logo } from './ui';
 
@@ -7,6 +7,7 @@ const tabs = [
   { to: '/', label: 'This week', icon: CalendarDays },
   { to: '/slides', label: 'Slides', icon: Presentation },
   { to: '/team', label: 'Team', icon: Users },
+  { to: '/decks', label: 'Decks', icon: Layers },
   { to: '/preview', label: 'Preview', icon: Play },
 ];
 
@@ -37,7 +38,7 @@ export function Shell() {
         <Outlet />
       </main>
       <nav className="no-print safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur md:hidden" aria-label="Main">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-5">
           {tabs.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => `flex h-16 flex-col items-center justify-center gap-1 text-xs font-bold ${isActive ? 'text-blue' : 'text-muted'}`}>
               <Icon className="size-6" aria-hidden />

@@ -72,16 +72,16 @@ describe('teams, spellings and the deck', () => {
     { name: 'CHIDI EZE', designation: 'RRO', branch: 'LEKKI', team: 'Corporate Team', lead: true },
   ];
 
-  it('takes teams and senior staff from last month’s slides, and guesses the rest from the order', async () => {
+  it('reads teams and senior staff from the file’s order; names from last month’s slides', async () => {
     const r = await sample();
     const plan = planBranch(r, 'LEKKI', [], slides);
     const by = (n: string) => plan.find((p) => p.file === n)!;
-    expect(by('ADA OBI')).toMatchObject({ team: '', lead: true, source: 'slides' });
-    expect(by('BAYO ADE')).toMatchObject({ team: 'Social Team', lead: true, source: 'slides' });
+    expect(by('ADA OBI')).toMatchObject({ team: '', lead: true, source: 'excel' }); // a manager with nobody under him: senior staff only
+    expect(by('BAYO ADE')).toMatchObject({ team: 'Social Team', lead: true, source: 'excel' }); // heads the rows under him
     expect(by('BAYO ADE').choices).toEqual(['BAYO ADE', 'BAYO ADEE']);
-    expect(by('KADRI TUNDE')).toMatchObject({ team: 'Social Team', source: 'order' }); // the row above's team
+    expect(by('KADRI TUNDE')).toMatchObject({ team: 'Social Team', lead: false });
     expect(by('KADRI TUNDE').choices).toEqual(['KADRI TUNDE', 'KADIRI TUNDE']);
-    expect(by('EFE OKON')).toMatchObject({ team: '', source: 'none' }); // below OTHERS
+    expect(by('EFE OKON')).toMatchObject({ team: '', lead: false }); // below OTHERS
   });
 
   it('builds her deck: senior staff, teams in the file’s order, others, summary, Jan–Dec', async () => {
@@ -110,13 +110,26 @@ describe('teams, spellings and the deck', () => {
     expect(a.history).toContainEqual({ branch: 'LEKKI', month: '2026-09', land: 2050000, infra: 625000, nc: 3 });
   });
 
+  it('works with nothing but the Excel: teams named after their heads', async () => {
+    const plan = planBranch(await sample(), 'LEKKI', [], []);
+    expect(plan.map((p) => [p.file, p.team, p.lead])).toEqual([
+      ['ADA OBI', '', true],
+      ['BAYO ADE', 'Bayo Team', true],
+      ['KADRI TUNDE', 'Bayo Team', false],
+      ['CHIDI EZE', 'Chidi Team', true],
+      ['DAPO ALAO', 'Chidi Team', false],
+      ['EFE OKON', '', false],
+    ]);
+    expect(plan.find((p) => p.file === 'BAYO ADE')!.autoTeam).toBe(true);
+  });
+
   it('asks nothing the second month: teams and spellings come from her list', async () => {
     const r = await sample();
     const first = planBranch(r, 'LEKKI', [], slides);
     const a = applyPlan(r, 'LEKKI', '2026-09', first, {}, [], []);
     const list = a.upserts.map((u, i) => ({ ...mk(u.name!), ...u, id: String(i) }) as Marketer);
     const again = planBranch(r, 'LEKKI', list, []);
-    expect(again.every((p) => p.source === 'list')).toBe(true);
+    expect(again.map((p) => [p.team, p.lead])).toEqual(first.map((p) => [p.team, p.lead]));
     expect(again.filter((p) => p.choices.length > 1)).toEqual([]);
     // She picked the slide's spelling once: next time the file's spelling still lands on her list's name.
     const picked = first.map((p) => (p.file === 'BAYO ADE' ? { ...p, name: 'BAYO ADEE' } : p));
@@ -124,6 +137,32 @@ describe('teams, spellings and the deck', () => {
     const list2 = b.upserts.map((u, i) => ({ ...mk(u.name!), ...u, id: String(i) }) as Marketer);
     const deck = buildReportDeck({ region: 'Lagos', month: '2026-09', branches: [b.saved], marketers: list2, history: [] });
     expect(JSON.stringify(deck)).toContain('BAYO ADEE');
-    expect(planBranch(r, 'LEKKI', list2, []).find((p) => p.file === 'BAYO ADE')).toMatchObject({ name: 'BAYO ADEE', source: 'list' });
+    expect(planBranch(r, 'LEKKI', list2, []).find((p) => p.file === 'BAYO ADE')).toMatchObject({ name: 'BAYO ADEE', team: 'Social Team' });
+  });
+});
+
+describe('built-in past months', async () => {
+  const { PAST_MONTHS, withPast } = await import('./pastMonths');
+  it('has January – August 2026 for both branches, and her own figures win', () => {
+    for (const b of ['FAGBA', 'ABULE EGBA']) expect(PAST_MONTHS.filter((p) => p.branch === b).map((p) => p.month)).toEqual(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08']);
+    const sum = (b: string) => Math.round(PAST_MONTHS.filter((p) => p.branch === b).reduce((a, p) => a + (p.land ?? 0) + (p.infra ?? 0), 0) * 100) / 100;
+    // Her September slides' year totals minus September itself.
+    expect(sum('FAGBA')).toBe(Math.round((360532146.61 - 36607684.7) * 100) / 100);
+    expect(sum('ABULE EGBA')).toBe(270432721.3 - 36942000);
+    const mine = withPast([{ branch: 'FAGBA', month: '2026-01', land: 1, infra: 2, nc: 3 }]);
+    expect(mine.filter((h) => h.branch === 'FAGBA' && h.month === '2026-01')).toEqual([{ branch: 'FAGBA', month: '2026-01', land: 1, infra: 2, nc: 3 }]);
+    expect(mine).toHaveLength(16);
+  });
+});
+
+describe('branch names', async () => {
+  const { buildReportDeck } = await import('./reportDeck');
+  const { withPast } = await import('./pastMonths');
+  it('ABULE-EGBA, Abule Egba and ABULE EGBA all get the built-in months', () => {
+    for (const branch of ['ABULE-EGBA', 'Abule Egba', 'ABULE EGBA']) {
+      const deck = buildReportDeck({ region: 'R', month: '2026-09', branches: [{ branch, fileName: '', rows: [{ name: 'A B', designation: 'BE', land: 1, house: 0, infra: 0, nc: 0, others: false }] }], marketers: [], history: withPast([]) });
+      const t = deck.find((d) => d.id.startsWith('trend:'))!.slide as { table: { rows: string[][] } };
+      expect(t.table.rows[0]).toEqual(['JANUARY', '20,113,665.00', '8,100,000.00', '28,213,665.00', '1']);
+    }
   });
 });

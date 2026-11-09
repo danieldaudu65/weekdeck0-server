@@ -118,6 +118,7 @@ function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: bool
                 ))}
               </tr>
             ))}
+            {s.total.length > 0 && (
             <tr style={animate ? rowIn(s.rows.length + 1, Math.min(1400, index * 32)) : undefined}>
               {s.total.map((c, ci) => (
                 <td key={ci} style={cell({ background: hex(s.totalFill), color: hex(s.totalInk), textAlign: ci === 0 ? 'left' : 'center', fontWeight: 700 })}>
@@ -125,6 +126,7 @@ function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: bool
                 </td>
               ))}
             </tr>
+            )}
           </tbody>
         </table>
       );

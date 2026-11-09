@@ -136,6 +136,23 @@ models `Accountant`, `Payment`, `Marketer`, `ImportedDeck`. Browser: `src/pages/
 read/write on JSZip, importer, deck builder, name matching, slide import and
 checks; tests in `accounts.test.ts` and `slides.test.ts`). No new packages.
 
+## Decks: restyle any deck (/decks)
+
+Team leaders upload anyone's slides (PowerPoint .pptx, PDF including Google Slides
+downloads, or photos) and WeekDeck rebuilds them in its looks (12 styles × 20 colours).
+
+- **Reading** (`client/src/lib/restyle/read.ts`, `load.ts`): titles, bullet points (sub-points kept,
+  typed bullets cleaned), tables, charts (their figures become a table), SmartArt (its text), the
+  slide's main picture; first slide → cover, "Thank you" → big title. PDF pages that are scans,
+  photos or charts are kept as the page itself (and can be switched to text in the editor).
+- **Editing** (`pages/decks/`): look, 3D motion (cube / flip / zoom / slide), show / hide / reorder /
+  add / delete slides, edit words, tables and pictures. Saves by itself.
+- **Out**: *3D presentation* (.html, one file, plays offline full screen with 3D motion, clicker
+  keys work: `lib/export3d.ts`), *PowerPoint* (.pptx with PowerPoint's own 3D transitions),
+  *PDF* (print page), and a *share link* (`/deck/<id>`, anyone can watch in 3D, no login).
+- **Server**: `models/RestyleDeck.js`, `routes/decks.js` (`/api/decks`, public `/api/shared/:id`),
+  cleaned by `utils/restyle.js` (≤ 80 slides, pictures ≤ 14 MB a deck).
+
 ## Run it on your computer
 
 Needs Node.js 20+ and a MongoDB database.

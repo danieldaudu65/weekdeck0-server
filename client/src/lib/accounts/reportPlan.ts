@@ -3,9 +3,12 @@
  *
  * - each marketer's spelling: her list, last month's slides and the file's
  *   other tabs may spell a name another way (KENNRTH / KENNETH); she picks;
- * - each marketer's team and whether they're senior staff: from her list,
- *   else from last month's slides, else a guess from the file's order (the
- *   rows of a team come together, team head first);
+ * - each marketer's team and whether they're senior staff: read from the
+ *   file's order. TEAM'S REPORT lists each team as its head (a manager: DCRO,
+ *   RRO …) followed by the head's BEs; managers with nobody under them (DDSM,
+ *   TCRO at the top) are senior staff only; after the OTHERS row, no team.
+ *   Team names come from her list or last month's slides, else the head's name.
+ *   (Files without that pattern: her list, then last month's slides.)
  * - what gets saved: the report rows, her list, the month's totals.
  */
 import { nameKey } from './columns';
@@ -15,7 +18,7 @@ import { rowTotal, type ReportFile } from './reportExcel';
 import type { HistoryRow, Marketer } from './accDeck';
 import type { TeamEntry } from './slideCheck';
 
-export type Source = 'list' | 'slides' | 'order' | 'none';
+export type Source = 'excel' | 'list' | 'slides' | 'order' | 'none';
 
 export interface PlanRow {
   /** The name as the file writes it. */
@@ -31,7 +34,16 @@ export interface PlanRow {
   source: Source;
   /** Her list's entry for this person, if any. */
   marketerId: string | null;
+  /** The team was named after its head (no name known yet): worth renaming once. */
+  autoTeam?: boolean;
 }
+
+/** A manager who can head a team; BEs, independents and operations staff can't. */
+export const isHeadRank = (designation: string) => {
+  const d = designation.toUpperCase().replace(/[^A-Z]/g, '');
+  return Boolean(d) && !/^(BE|RO|HOT|INDEPENDENT|OPERATIONS?|ACCOUNTANT|ACCT|INTERN)$/.test(d);
+};
+const titleCase = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
 
 const words = (s: string) => new Set(nameKey(s).split(' ').filter(Boolean));
 /** "AROYEHUN MATTHEW" inside "AROYEHUN OLUWASEUN MATTHEW": a short form, not another spelling. */
@@ -46,6 +58,7 @@ export function planBranch(file: ReportFile, branch: string, marketers: Marketer
   const mine = marketers.filter((m) => !m.branch || sameBranch(m.branch, branch));
   const fromSlides = entries.filter((e) => sameBranch(e.branch, branch));
   const out: PlanRow[] = [];
+  const found: { m: Marketer | null; hits: TeamEntry[] }[] = [];
   for (const r of file.rows) {
     const k = nameKey(r.name);
     // 1. Her list: the same name or a spelling she confirmed before …
@@ -94,7 +107,48 @@ export function planBranch(file: ReportFile, branch: string, marketers: Marketer
       }
     }
     out.push({ file: r.name, designation: r.designation, choices, name: m ? m.name : r.name, team, lead, source, marketerId: m?.id ?? null });
+    found.push({ m, hits });
   }
+  return fromOrder(file, out, found) ?? out;
+}
+
+/**
+ * Teams and senior staff from the file's order (see the top of this file).
+ * null when the file doesn't follow it (no manager before OTHERS).
+ */
+function fromOrder(file: ReportFile, plan: PlanRow[], found: { m: Marketer | null; hits: TeamEntry[] }[]): PlanRow[] | null {
+  const main = file.rows.map((r, i) => ({ r, i })).filter((x) => !x.r.others);
+  if (!main.some((x) => isHeadRank(x.r.designation))) return null;
+  const blocks: { head: number; members: number[] }[] = [];
+  const loose: number[] = []; // BEs before the first manager
+  for (const { r, i } of main) {
+    if (isHeadRank(r.designation)) blocks.push({ head: i, members: [] });
+    else if (blocks.length) blocks[blocks.length - 1].members.push(i);
+    else loose.push(i);
+  }
+  const knownTeam = (i: number) => found[i].m?.team || found[i].hits.find((h) => h.team)?.team || '';
+  const used = new Set<string>();
+  const out = plan.map((p) => ({ ...p, team: '', lead: false, source: 'excel' as Source, autoTeam: false }));
+  for (const b of blocks) {
+    out[b.head].lead = true;
+    if (!b.members.length) continue; // senior staff only
+    // The team's name: the head's, else what most members were in, else after the head.
+    const votes = new Map<string, number>();
+    for (const i of b.members) {
+      const t = knownTeam(i);
+      if (t) votes.set(t, (votes.get(t) ?? 0) + 1);
+    }
+    let name = knownTeam(b.head) || [...votes.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || '';
+    name = name.replace(/\bCorperate\b/gi, 'Corporate'); // a typo in their slides
+    const auto = !name || used.has(name.toUpperCase());
+    if (auto) name = `${titleCase(out[b.head].name.split(' ')[0])} Team`;
+    used.add(name.toUpperCase());
+    for (const i of [b.head, ...b.members]) {
+      out[i].team = name;
+      out[i].autoTeam = auto;
+    }
+  }
+  for (const i of loose) out[i].source = 'none';
   return out;
 }
 

@@ -106,7 +106,7 @@ async function addShape(pres: Pres, s: Slide, sh: Shape) {
         ...sh.rows.map((r, ri) =>
           r.map((c, ci) => cell(c, { fill: { color: ri % 2 ? sh.stripe : sh.bg }, color: sh.ink, bold: sh.boldEdges !== false && (ci === 0 || ci === r.length - 1), align: ci === 0 ? 'left' : 'center' })),
         ),
-        sh.total.map((c, ci) => cell(c, { fill: { color: sh.totalFill }, color: sh.totalInk, bold: true, align: ci === 0 ? 'left' : 'center' })),
+        ...(sh.total.length ? [sh.total.map((c, ci) => cell(c, { fill: { color: sh.totalFill }, color: sh.totalInk, bold: true, align: ci === 0 ? 'left' : 'center' }))] : []),
       ];
       s.addTable(rows, { ...pos, colW: sh.colW.map((w) => w * IN), rowH: sh.rowH * IN, autoPage: false });
       return;

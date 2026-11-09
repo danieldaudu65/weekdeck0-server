@@ -15,6 +15,7 @@ const photoRoutes = require('./routes/photos');
 const placeRoutes = require('./routes/places');
 const regionRoutes = require('./routes/region');
 const accountsRoutes = require('./routes/accounts');
+const { decksRouter, sharedRouter } = require('./routes/decks');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -39,6 +40,8 @@ function createApp() {
   // Accountants save and import many sheet rows at once; uploaded slides can include pictures.
   app.use('/api/accounts/imported', express.json({ limit: '15mb' }));
   app.use('/api/accounts', express.json({ limit: '3mb' }));
+  // A team leader's own decks carry their pictures.
+  app.use('/api/decks', express.json({ limit: '16mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: 240, standardHeaders: 'draft-7', legacyHeaders: false }));
 
@@ -54,6 +57,8 @@ function createApp() {
   app.use('/api/places', placeRoutes);
   app.use('/api/region', regionRoutes);
   app.use('/api/accounts', accountsRoutes);
+  app.use('/api/decks', decksRouter);
+  app.use('/api/shared', sharedRouter);
 
   app.use(notFound);
   app.use(errorHandler);

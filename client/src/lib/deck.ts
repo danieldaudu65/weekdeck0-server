@@ -43,7 +43,9 @@ export type DeckSlide =
   | { kind: 'map'; title: string; subtitle: string; image: string; days: { day: string; color: string; stops: string[] }[] }
   | { kind: 'thanks'; title: string; sub: string }
   /** A picture filling the slide under its title (a photo or scan of a slide the accountant uploaded). ratio = width / height. */
-  | { kind: 'picture'; title: string; subtitle: string; image: string; ratio: number };
+  | { kind: 'picture'; title: string; subtitle: string; image: string; ratio: number }
+  /** Points (level 0, or 1 for a sub-point), with an optional picture beside them: any deck's text slide. */
+  | { kind: 'bullets'; title: string; subtitle: string; points: { text: string; level: number }[]; image: string; ratio: number };
 
 export interface DeckInput {
   team: Team;

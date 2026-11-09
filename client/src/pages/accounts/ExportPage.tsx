@@ -9,6 +9,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, EyeOff, FileSpreads
 import { useAccounts, Panel, WORKBOOK_ON } from './AccountsApp';
 import { ReportImportDialog } from './ReportImportDialog';
 import { buildReportDeck, branchTotals, type SavedBranch } from '../../lib/accounts/reportDeck';
+import { withPast } from '../../lib/accounts/pastMonths';
 import { Button, Spinner } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { SlideCanvas } from '../../components/SlideCanvas';
@@ -117,7 +118,7 @@ export function ExportPage() {
   const generated = useMemo(
     () =>
       !WORKBOOK_ON
-        ? buildReportDeck({ region: acc.region, month, branches: report ?? [], marketers, history: acc.history })
+        ? buildReportDeck({ region: acc.region, month, branches: report ?? [], marketers, history: withPast(acc.history) })
         : !ledger.rows.length
         ? [] // no workbook rows this month: only uploaded slides (if any)
         : buildAccountsDeck({
@@ -127,7 +128,7 @@ export function ExportPage() {
         marketers,
         tabs: acc.tabs,
         summary: summary ?? [],
-        history: acc.history,
+        history: withPast(acc.history),
         countAll: prefs.countAll,
       }),
     [acc.region, acc.tabs, acc.history, month, ledger.rows, marketers, summary, prefs.countAll, report],
@@ -477,9 +478,9 @@ function EarlierMonths({ summary }: { summary: SummaryCell[] }) {
   const { acc, saveMe, month } = useAccounts();
   const toast = useToast();
   const year = month.slice(0, 4);
-  const branches = useMemo(() => [...new Set([...acc.tabs.map((t) => (t.branch || t.name).toUpperCase()), ...acc.history.map((h) => h.branch)])].filter(Boolean), [acc.tabs, acc.history]);
-  const [rows, setRows] = useState<HistoryRow[]>(acc.history);
-  useEffect(() => setRows(acc.history), [acc.history]);
+  const branches = useMemo(() => [...new Set([...acc.tabs.map((t) => (t.branch || t.name).toUpperCase()), ...withPast(acc.history).map((h) => h.branch)])].filter(Boolean), [acc.tabs, acc.history]);
+  const [rows, setRows] = useState<HistoryRow[]>(() => withPast(acc.history));
+  useEffect(() => setRows(withPast(acc.history)), [acc.history]);
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
 
   const get = (branch: string, m: string) => rows.find((h) => h.branch === branch && h.month === m);

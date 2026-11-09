@@ -16,6 +16,10 @@ import { takeAfterLogin } from './lib/afterLogin';
 import { RegionPage } from './pages/RegionPage';
 import { RegionPresentPage } from './pages/RegionPresentPage';
 import { AccountsApp } from './pages/accounts/AccountsApp';
+import { DecksPage } from './pages/decks/DecksPage';
+import { DeckEditorPage } from './pages/decks/DeckEditorPage';
+import { DeckPrintPage } from './pages/decks/DeckPrintPage';
+import { SharedDeckPage } from './pages/decks/SharedDeckPage';
 
 /** Signed-in only. A team without members goes to setup first. */
 function RequireTeam() {
@@ -49,10 +53,13 @@ export default function App() {
                 <Route path="/print" element={<PrintPage />} />
                 <Route path="/present" element={<PresentPage />} />
                 <Route path="/preview" element={<PreviewPage />} />
+                <Route path="/decks/:id/print" element={<DeckPrintPage />} />
                 <Route element={<Shell />}>
                   <Route index element={<WeekPage />} />
                   <Route path="/slides" element={<SlidesPage />} />
                   <Route path="/team" element={<TeamPage />} />
+                  <Route path="/decks" element={<DecksPage />} />
+                  <Route path="/decks/:id" element={<DeckEditorPage />} />
                 </Route>
               </Route>
               {/* Region heads have their own login, separate from teams. */}
@@ -60,6 +67,8 @@ export default function App() {
               <Route path="/region/present/:teamId" element={<RegionPresentPage />} />
               {/* Accountants have their own login too: one workbook per accountant and region. */}
               <Route path="/accounts/*" element={<AccountsApp />} />
+              {/* A shared deck: anyone with the link watches it in 3D. */}
+              <Route path="/deck/:shareId" element={<SharedDeckPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

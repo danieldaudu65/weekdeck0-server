@@ -38,10 +38,10 @@ export function ReportImportDialog({ onClose, onDone }: { onClose: () => void; o
   const [fixes, setFixes] = useState<Record<string, RowFix>>({});
   const [entries, setEntries] = useState<TeamEntry[]>([]);
   const [deckHistory, setDeckHistory] = useState<HistoryRow[]>([]);
-  const [deckName, setDeckName] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [detail, setDetail] = useState(false);
 
   const plan = (f: Loaded, ents: TeamEntry[]) => planBranch(f.file, f.branch, marketers, ents);
 
@@ -81,7 +81,6 @@ export function ReportImportDialog({ onClose, onDone }: { onClose: () => void; o
       if (!ents.length) throw new Error('No team slides found in that file.');
       setEntries(ents);
       setDeckHistory(historyFromDeck(r.slides, month.slice(0, 4)).filter((h) => h.month < month));
-      setDeckName(file.name);
       setPlans(Object.fromEntries(files.map((f) => [f.key, plan(f, ents)])));
       toast(`${ents.length} people found on ${file.name}`);
     } catch (err) {
@@ -95,8 +94,7 @@ export function ReportImportDialog({ onClose, onDone }: { onClose: () => void; o
 
   const issues = useMemo(() => files.map((f) => ({ f, list: checkReport(f.file) })), [files]);
   const spellings = files.flatMap((f) => (plans[f.key] ?? []).map((r, i) => ({ f, r, i })).filter((x) => x.r.choices.length > 1));
-  const toCheck = files.reduce((a, f) => a + (plans[f.key] ?? []).filter((r, i) => !f.file.rows[i].others && (r.source === 'order' || r.source === 'none') && !r.team).length, 0);
-  const noTeams = files.length > 0 && files.every((f) => (plans[f.key] ?? []).every((r) => !r.team && !r.lead));
+  const autoNamed = files.some((f) => (plans[f.key] ?? []).some((r) => r.autoTeam));
 
   const run = async () => {
     setBusy('Saving…');
@@ -280,66 +278,106 @@ export function ReportImportDialog({ onClose, onDone }: { onClose: () => void; o
                 </section>
               )}
 
-              {/* Teams */}
-              <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+              {/* Teams: read from the file's order; she only names them (once) */}
+              <section className="space-y-4 rounded-2xl bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="flex items-center gap-2 font-extrabold">
                     <Users className="size-5 text-blue" aria-hidden /> Teams
-                    {toCheck > 0 && <span className="rounded-full bg-sun-soft px-2 py-0.5 text-xs font-bold text-[#7a4f00]">{toCheck} to check</span>}
                   </h3>
-                  <Button size="sm" variant={noTeams ? 'primary' : 'soft'} icon={<Presentation className="size-4" aria-hidden />} onClick={() => deckInput.current?.click()} loading={reading}>
-                    {deckName ? 'Other slides' : 'Learn from last month’s slides'}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {autoNamed && (
+                      <Button size="sm" variant="soft" icon={<Presentation className="size-4" aria-hidden />} onClick={() => deckInput.current?.click()} loading={reading}>
+                        Names from last month’s slides
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => setDetail((d) => !d)}>
+                      {detail ? 'Done' : 'Change'}
+                    </Button>
+                  </div>
                 </div>
-                {deckName && <p className="text-xs font-semibold text-muted">From {deckName}</p>}
                 {files.map((f) => {
                   const rows = plans[f.key] ?? [];
+                  const teams = [...new Set(rows.map((r) => r.team).filter(Boolean))];
                   const opts = teamOptions(rows, f.branch, marketers, entries);
+                  const others = rows.filter((r) => !r.team && !r.lead);
+                  const short = (n: string) => n.split(' ').slice(0, 2).join(' ');
                   return (
-                    <div key={f.key}>
-                      <p className="mb-1 text-sm font-extrabold uppercase tracking-wider text-muted">{f.branch}</p>
-                      <datalist id={`teams-${f.key}`}>
-                        {opts.map((o) => (
-                          <option key={o} value={o} />
-                        ))}
-                      </datalist>
-                      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-                        <table className="w-full min-w-[520px] text-sm">
-                          <thead>
-                            <tr className="text-left text-[11px] uppercase tracking-wider text-muted">
-                              <th className="py-1 font-bold">Name</th>
-                              <th className="py-1 font-bold">Team</th>
-                              <th className="w-24 py-1 text-center font-bold">Senior staff</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((r, i) => {
-                              const check = !f.file.rows[i].others && !r.team && (r.source === 'order' || r.source === 'none');
-                              const guessed = r.source === 'order';
-                              return (
-                                <tr key={i} className="border-t border-line">
-                                  <td className="py-1 pr-2">
-                                    <span className="font-bold">{r.name}</span> <span className="text-xs text-muted">{r.designation}</span>
-                                  </td>
-                                  <td className="py-1 pr-2">
-                                    <input
-                                      list={`teams-${f.key}`}
-                                      value={r.team}
-                                      placeholder="Others"
-                                      onChange={(e) => setRow(f.key, i, { team: e.target.value, source: 'list' })}
-                                      aria-label={`${r.name} team`}
-                                      className={`h-9 w-full rounded-lg border bg-white px-2 font-semibold ${check || guessed ? 'border-[#e0a400] bg-sun-soft/40' : 'border-line'}`}
-                                    />
-                                  </td>
-                                  <td className="py-1 text-center">
-                                    <input type="checkbox" checked={r.lead} onChange={(e) => setRow(f.key, i, { lead: e.target.checked })} aria-label={`${r.name} senior staff`} className="size-4 accent-[var(--color-blue)]" />
-                                  </td>
+                    <div key={f.key} className="space-y-2">
+                      <p className="text-sm font-extrabold uppercase tracking-wider text-muted">{f.branch}</p>
+                      {!detail ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-xl bg-blue-soft/60 p-3">
+                            <p className="text-xs font-extrabold uppercase tracking-wider text-blue">Senior staff · {rows.filter((r) => r.lead).length}</p>
+                            <p className="mt-1 text-sm font-semibold">{rows.filter((r) => r.lead).map((r) => short(r.name)).join(', ') || '—'}</p>
+                          </div>
+                          {teams.map((t) => {
+                            const members = rows.filter((r) => r.team === t);
+                            const auto = members.some((r) => r.autoTeam);
+                            return (
+                              <div key={t} className={`rounded-xl p-3 ${auto ? 'bg-sun-soft/60' : 'bg-paper'}`}>
+                                <input
+                                  defaultValue={t}
+                                  onBlur={(e) => {
+                                    const next = e.target.value.trim();
+                                    if (next && next !== t) setPlans((p) => ({ ...p, [f.key]: p[f.key].map((r) => (r.team === t ? { ...r, team: next, autoTeam: false } : r)) }));
+                                  }}
+                                  aria-label={`Name of ${t}`}
+                                  className="h-8 w-full rounded-lg border border-transparent bg-transparent px-1 text-sm font-extrabold hover:border-line focus:border-blue focus:bg-white"
+                                />
+                                <p className="mt-1 px-1 text-xs font-semibold text-muted">
+                                  <b className="text-ink">{short(members[0]?.name ?? '')}</b>
+                                  {members.length > 1 ? `, ${members.slice(1).map((r) => short(r.name)).join(', ')}` : ''}
+                                </p>
+                              </div>
+                            );
+                          })}
+                          <div className="rounded-xl bg-paper p-3">
+                            <p className="text-xs font-extrabold uppercase tracking-wider text-muted">Others · {others.length}</p>
+                            <p className="mt-1 text-xs font-semibold text-muted">{others.map((r) => short(r.name)).join(', ') || '—'}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <datalist id={`teams-${f.key}`}>
+                            {opts.map((o) => (
+                              <option key={o} value={o} />
+                            ))}
+                          </datalist>
+                          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+                            <table className="w-full min-w-[520px] text-sm">
+                              <thead>
+                                <tr className="text-left text-[11px] uppercase tracking-wider text-muted">
+                                  <th className="py-1 font-bold">Name</th>
+                                  <th className="py-1 font-bold">Team</th>
+                                  <th className="w-24 py-1 text-center font-bold">Senior staff</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                              </thead>
+                              <tbody>
+                                {rows.map((r, i) => (
+                                  <tr key={i} className="border-t border-line">
+                                    <td className="py-1 pr-2">
+                                      <span className="font-bold">{r.name}</span> <span className="text-xs text-muted">{r.designation}</span>
+                                    </td>
+                                    <td className="py-1 pr-2">
+                                      <input
+                                        list={`teams-${f.key}`}
+                                        value={r.team}
+                                        placeholder="Others"
+                                        onChange={(e) => setRow(f.key, i, { team: e.target.value, autoTeam: false })}
+                                        aria-label={`${r.name} team`}
+                                        className="h-9 w-full rounded-lg border border-line bg-white px-2 font-semibold"
+                                      />
+                                    </td>
+                                    <td className="py-1 text-center">
+                                      <input type="checkbox" checked={r.lead} onChange={(e) => setRow(f.key, i, { lead: e.target.checked })} aria-label={`${r.name} senior staff`} className="size-4 accent-[var(--color-blue)]" />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}

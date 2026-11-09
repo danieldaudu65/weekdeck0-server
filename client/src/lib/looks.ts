@@ -548,8 +548,8 @@ const bold: StyleImpl = {
     const shapes: S[] = [
       img ? ({ type: 'image', x: 820, y: 0, w: 460, h: 720, src: s.image } as S) : R(820, 0, 460, 720, t.accent),
       ...(img ? [R(820, 500, 220, 220, t.accent)] : []),
-      T(img ? 836 : 860, img ? 512 : 120, img ? 190 : 380, 50, 'WEEK', img ? 28 : 46, t.accentInk, { bold: true, font: 'display' }),
-      T(img ? 836 : 860, img ? 550 : 170, img ? 190 : 380, img ? 160 : 360, String(s.weekNo), img ? 140 : 300, t.accentInk, { bold: true, font: 'display' }),
+      T(img ? 836 : 860, img ? 512 : 120, img ? 190 : 380, 50, s.weekNo ? 'WEEK' : '', img ? 28 : 46, t.accentInk, { bold: true, font: 'display' }),
+      T(img ? 836 : 860, img ? 550 : 170, img ? 190 : 380, img ? 160 : 360, s.weekNo ? String(s.weekNo) : '', img ? 140 : 300, t.accentInk, { bold: true, font: 'display' }),
       ...(img ? [] : [T(860, 560, 380, 40, s.range, 22, t.accentInk, { bold: true })]),
       R(80, 120, 90, 10, t.accent),
       T(80, 160, 680, 300, s.title.toUpperCase(), fit(s.title.toUpperCase(), 680, 300, 66, 30, 'display'), t.coverInk, { font: 'display', valign: 'top' }),
@@ -647,7 +647,7 @@ const editorial: StyleImpl = {
       shapes: [
         R(80, 60, 1120, 3, t.coverInk),
         R(80, 68, 1120, 1, t.coverInk),
-        T(80, 76, 600, 30, s.kicker ? `THE ${s.kicker}` : 'THE WEEKLY REPORT', 14, t.coverMuted, { bold: true, spacing: 3 }),
+        T(80, 76, 600, 30, s.kicker === undefined ? 'THE WEEKLY REPORT' : s.kicker ? `THE ${s.kicker}` : '', 14, t.coverMuted, { bold: true, spacing: 3 }),
         T(680, 76, 520, 30, s.range, 15, t.coverMuted, { align: 'right', italic: true, font: 'serif' }),
         ...(img ? [R(744, 140, 456, 496, t.accent), { type: 'image', x: 760, y: 156, w: 424, h: 464, src: s.image } as S] : []),
         T(80, 150, tw, 320, s.title, fit(s.title, tw, 320, 84, 32, 'serif'), t.coverInk, { font: 'serif', bold: true, valign: 'top' }),
@@ -719,7 +719,7 @@ function glowCover(s: Kind<'cover'>, t: Theme): Laid {
       ...glow(1100, 160, 420, g.base, g.light, 0.6),
       ...glow(180, 760, 300, g.base, g.second, 0.4),
       ...(img ? [{ type: 'image', x: 760, y: 120, w: 440, h: 480, src: s.image } as S] : []),
-      R(80, 120, 220, 40, g.card, 20),
+      ...(s.kicker === '' ? [] : [R(80, 120, 220, 40, g.card, 20)]),
       T(80, 120, 220, 40, s.kicker ?? 'WEEKLY REPORT', 14, g.light, { bold: true, align: 'center', spacing: 2 }),
       T(80, 190, tw, 260, s.title.toUpperCase(), fit(s.title.toUpperCase(), tw, 260, 62, 28), g.ink, { bold: true, valign: 'top' }),
       T(80, 470, tw, 40, s.week, 22, g.light, { bold: true }),
@@ -846,7 +846,7 @@ const dashboard: StyleImpl = {
         R(56, 56, 1168, 608, d.card, 28),
         R(56, 56, 20, 608, t.primary, 0),
         ...(img ? [{ type: 'image', x: 800, y: 96, w: 384, h: 528, src: s.image } as S] : [R(800, 96, 384, 528, t.primary, 22), ...motif(880, 290, 2.8, t.accent, mix(t.primary, 'FFFFFF', 0.25))]),
-        R(120, 110, 200, 40, t.surface, 20),
+        ...(s.kicker === '' ? [] : [R(120, 110, 200, 40, t.surface, 20)]),
         T(120, 110, 200, 40, s.kicker ?? 'WEEKLY REPORT', 13, t.highlight, { bold: true, align: 'center', spacing: 1.5 }),
         T(120, 180, 640, 240, s.title, fit(s.title, 640, 240, 56, 26), t.ink, { bold: true, valign: 'top' }),
         R(120, 452, 300, 86, t.surface, 18),
@@ -1170,6 +1170,50 @@ function mapContent(slide: Kind<'map'>, a: Area, c: ReturnType<typeof inkFor>, s
   return out;
 }
 
+/**
+ * Points down the left (a dot per point, sub-points indented), and the slide's
+ * picture on the right when it has one. Text shrinks to fit, never below 15px.
+ */
+function bulletsContent(slide: Kind<'bullets'>, a: Area, c: ReturnType<typeof inkFor>, t: Theme, styleId: string): S[] {
+  const out: S[] = [];
+  const mark = styleId === 'glow' ? c.accent : t.highlight;
+  let tw = a.w;
+  if (slide.image) {
+    const r = slide.ratio > 0 ? slide.ratio : 4 / 3;
+    const iw = Math.min(a.w * (slide.points.length ? 0.44 : 1), a.h * r);
+    const ih = iw / r;
+    const ix = slide.points.length ? a.x + a.w - iw : a.x + (a.w - iw) / 2;
+    const iy = a.y + (a.h - ih) / 2;
+    if (styleId !== 'minimal' && styleId !== 'editorial') out.push(R(ix - 8, iy - 8, iw + 16, ih + 16, c.card, styleId === 'bold' || styleId === 'framed' ? 0 : 18));
+    out.push({ type: 'image', x: ix, y: iy, w: iw, h: ih, src: slide.image });
+    tw = a.w - iw - 56;
+  }
+  const pts = slide.points.filter((p) => p.text.trim()).slice(0, 14);
+  if (!pts.length || tw < 200) return out;
+  const indent = (p: { level: number }) => (p.level ? 46 : 0);
+  const sizeOf = (p: { level: number }, size: number) => (p.level ? Math.round(size * 0.84) : size);
+  const linesOf = (p: { text: string; level: number }, size: number) => {
+    const s = sizeOf(p, size);
+    const width = tw - indent(p) - s * 1.1;
+    return Math.max(1, Math.ceil((p.text.length * s * 0.52) / Math.max(80, width)) + (p.text.match(/\n/g)?.length ?? 0));
+  };
+  const heightAt = (size: number) => pts.reduce((h, p) => h + linesOf(p, size) * sizeOf(p, size) * 1.28 + size * 0.62, 0);
+  let size = pts.length <= 3 ? 34 : 30;
+  while (size > 15 && heightAt(size) > a.h) size--;
+  let y = a.y + Math.max(0, Math.min(a.h - heightAt(size), a.h * 0.08));
+  for (const p of pts) {
+    const s = sizeOf(p, size);
+    const h = linesOf(p, size) * s * 1.28;
+    const x = a.x + indent(p);
+    if (p.level) out.push(R(x, y + s * 0.56, s * 0.55, 4, mark, 2));
+    else if (styleId === 'bold' || styleId === 'framed' || styleId === 'stripes') out.push(R(x, y + s * 0.3, s * 0.5, s * 0.5, mark, styleId === 'stripes' ? s : 0));
+    else out.push(O(x, y + s * 0.3, s * 0.5, mark));
+    out.push(T(x + s * 1.05, y, tw - indent(p) - s * 1.05, h + 6, p.text, s, p.level ? c.muted : c.ink, { valign: 'top' }));
+    y += h + size * 0.62;
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ entry */
 
 /** Lay out one slide in a look (a Look, a saved id like "bold_coral", or an older palette-only id). */
@@ -1179,8 +1223,8 @@ export function layoutSlide(slide: DeckSlide, lookOrId: Look | string | Theme, c
   const t = look.palette;
   if (slide.kind === 'cover') return st.cover(slide, t);
   if (slide.kind === 'thanks') return st.thanks(slide, t);
-  const subtitle = slide.kind === 'table' || slide.kind === 'activities' || slide.kind === 'map' || slide.kind === 'picture' ? slide.subtitle : '';
-  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind === 'map' || slide.kind === 'picture' ? 'activities' : slide.kind);
+  const subtitle = slide.kind === 'table' || slide.kind === 'activities' || slide.kind === 'map' || slide.kind === 'picture' || slide.kind === 'bullets' ? slide.subtitle : '';
+  const f = st.frame(slide.title, subtitle, t, ctx, slide.kind === 'map' || slide.kind === 'picture' || slide.kind === 'bullets' ? 'activities' : slide.kind);
   const ink = inkFor(look.style.id, t);
   let content: S[];
   switch (slide.kind) {
@@ -1213,6 +1257,9 @@ export function layoutSlide(slide: DeckSlide, lookOrId: Look | string | Theme, c
       content = [{ type: 'image', x: a.x + (a.w - w) / 2, y: a.y + (a.h - h) / 2, w, h, src: slide.image }];
       break;
     }
+    case 'bullets':
+      content = bulletsContent(slide, f.area, ink, t, look.style.id);
+      break;
     case 'team':
       content = st.team(slide, f.area, t);
       break;
