@@ -33,6 +33,14 @@ export function build3dHtml(title: string, looks: Look3D[], opts: { transition?:
 <style>${CSS}</style>
 </head>
 <body>
+<div id="nojs">
+  <div>
+    <strong>${esc(title)}</strong>
+    <p>This app opened the presentation without its player, so it can't play here.</p>
+    <p>Open it in <b>Chrome</b> or <b>Safari</b> instead: tap <b>⋮</b> or <b>Share</b>, then <b>Open in browser</b> (or save it and open it from Chrome).</p>
+    <p>WhatsApp, Gmail and the Files app only preview it. Easier still: ask for the WeekDeck <b>share link</b>, which plays on any phone.</p>
+  </div>
+</div>
 <div id="app">
   <div id="stage"></div>
   <div id="grid" hidden></div>
@@ -49,6 +57,7 @@ export function build3dHtml(title: string, looks: Look3D[], opts: { transition?:
   </div>
   <div id="progress"><i></i></div>
   <div id="hint">← → or clicker to move · F full screen · G all slides · B black screen</div>
+  <div id="rotate">Turn your phone sideways for a bigger view · swipe to move</div>
 </div>
 <script id="deck" type="application/json">${data}</script>
 <script>${JS}</script>
@@ -76,6 +85,13 @@ table.s td,table.s th{padding:0 10px;white-space:nowrap;overflow:hidden;text-ove
 .on .in{animation:in .6s cubic-bezier(.2,.8,.2,1) both}
 .on .grow{animation:grow .9s cubic-bezier(.2,.8,.2,1) both;transform-origin:left center}
 .on tr.row{animation:row .55s cubic-bezier(.2,.8,.2,1) both}
+.on .photo{animation:photo 1.1s cubic-bezier(.65,0,.35,1) both}
+.on .photo img{animation:settle 1.6s cubic-bezier(.2,.8,.2,1) both,drift 16s ease-in-out infinite alternate}
+.on .pop{animation:pop .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes photo{from{opacity:0;clip-path:inset(0 100% 0 0)}35%{opacity:1}to{opacity:1;clip-path:inset(0 0 0 0)}}
+@keyframes settle{from{transform:scale(1.18)}to{transform:none}}
+@keyframes drift{from{transform:none}to{transform:scale(1.07) translate(-1.2%,-.8%)}}
+@keyframes pop{from{opacity:0;transform:scale(.6) rotate(-6deg)}70%{opacity:1;transform:scale(1.06) rotate(1deg)}to{opacity:1;transform:none}}
 @keyframes in{from{opacity:0;transform:translateY(22px) translateZ(-30px)}to{opacity:1;transform:none}}
 @keyframes grow{from{transform:scaleX(0)}to{transform:none}}
 @keyframes row{from{opacity:0;transform:translateX(-40px) rotateY(-12deg)}to{opacity:1;transform:none}}
@@ -97,12 +113,22 @@ table.s td,table.s th{padding:0 10px;white-space:nowrap;overflow:hidden;text-ove
 #grid .g.cur{outline:3px solid #ffb020;outline-offset:3px}
 #grid .g>div{position:absolute;left:0;top:0;width:1280px;height:720px;transform-origin:top left}
 #grid .g b{position:absolute;left:8px;bottom:6px;font:700 12px Arial;background:rgba(0,0,0,.55);padding:2px 7px;border-radius:6px}
-@media (prefers-reduced-motion:reduce){.on .in,.on .grow,.on tr.row{animation:none}.tilt{transition:none}}
+@media (prefers-reduced-motion:reduce){.on .in,.on .grow,.on tr.row,.on .photo,.on .photo img,.on .pop{animation:none}.tilt{transition:none}}
+#nojs{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#0b1220;color:#fff;font:16px/1.5 Arial,sans-serif;z-index:20}
+#nojs>div{max-width:440px}#nojs strong{display:block;font-size:20px;margin-bottom:10px}#nojs p{margin:0 0 12px;opacity:.9}
+.js #nojs{display:none}
+#rotate{display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:999px;background:rgba(10,14,26,.78);font:700 13px Arial;white-space:nowrap;z-index:5;animation:rot 6s ease both}
+@keyframes rot{0%,80%{opacity:1}to{opacity:0;visibility:hidden}}
+@media (orientation:portrait) and (max-width:640px){#rotate{display:block}}
+@media (pointer:coarse){#hint{display:none}}
+.nofs #full{display:none}
 @media (max-width:640px){#hint{display:none}#bar{bottom:10px;gap:4px;max-width:96vw}#fx{display:none}#bar select{max-width:110px}#count{min-width:48px}}
 `;
 
 const JS = String.raw`
 (function(){
+document.documentElement.className+=' js';
+if(!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen))document.documentElement.className+=' nofs';
 var D=JSON.parse(document.getElementById('deck').textContent);
 var FONTS={sans:'Arial, Helvetica, sans-serif',serif:'Georgia, "Times New Roman", serif',display:'"Arial Black", "Arial Bold", Gadget, Arial, sans-serif'};
 var app=document.getElementById('app'),stage=document.getElementById('stage'),grid=document.getElementById('grid'),black=document.getElementById('black');
@@ -140,7 +166,14 @@ function shape(s,i,live){
   if(s.type==='rect'||s.type==='ellipse'){
     e=el('div',Object.assign(box,{width:s.w+'px',height:s.h+'px',background:hex(s.fill),borderRadius:s.type==='ellipse'?'50%':(s.radius||0)+'px'},st),'s '+anim);
   }else if(s.type==='image'){
-    e=el('img',Object.assign(box,{width:s.w+'px',height:s.h+'px',objectFit:'cover'}),'s '+anim);e.src=s.src;e.alt='';
+    var sz={width:s.w+'px',height:s.h+'px',borderRadius:(s.radius||0)+'px'};
+    if(live&&s.anim!=='pop'){
+      e=el('div',Object.assign(box,sz,{overflow:'hidden'}),'s photo');e.style.animationDelay=d+'ms';
+      var im=el('img',{width:'100%',height:'100%',objectFit:'cover',display:'block',animationDelay:d+'ms, '+(d+1600)+'ms'},'');im.src=s.src;im.alt='';e.appendChild(im);
+      return e;
+    }
+    e=el('img',Object.assign(box,sz,{objectFit:'cover'}),'s '+(live?'pop':''));e.src=s.src;e.alt='';
+    if(live){e.style.animationDelay=(d+500)+'ms';return e}
   }else if(s.type==='text'){
     e=el('div',Object.assign(box,{width:s.w+'px',height:s.h+'px',justifyContent:s.valign==='middle'?'center':s.valign==='bottom'?'flex-end':'flex-start',textAlign:s.align||'left',color:hex(s.color),fontSize:s.size+'px',fontWeight:s.font==='display'?900:s.bold?700:400,fontFamily:FONTS[s.font||'sans'],fontStyle:s.italic?'italic':'normal',letterSpacing:(s.spacing||0)+'px'}),'s t '+anim);
     if(live&&s.anim==='count')count(e,s.text,d+200);else e.textContent=s.text;
@@ -168,7 +201,7 @@ function render(sl,live){
   return root;
 }
 var scale=1;
-function fit(){scale=Math.min(innerWidth*0.92/1280,innerHeight*0.86/720);Array.prototype.forEach.call(stage.children,function(n){n.style.setProperty('--k',scale);place(n,n._pose||'here')})}
+function fit(){var small=innerWidth<700||innerHeight<500;scale=Math.min(innerWidth*(small?0.98:0.92)/1280,innerHeight*(small?0.94:0.86)/720);Array.prototype.forEach.call(stage.children,function(n){n.style.setProperty('--k',scale);place(n,n._pose||'here')})}
 var POSES={
   cube:{l:'translateX(-62%) rotateY(70deg) translateZ(-240px)',r:'translateX(62%) rotateY(-70deg) translateZ(-240px)'},
   flip:{l:'rotateX(-90deg) translateZ(-200px)',r:'rotateX(90deg) translateZ(-200px)'},
@@ -207,6 +240,7 @@ function tiltTo(x,y){var t=stage.querySelector('.slide.on .tilt');if(t&&!reduce)
 addEventListener('mousemove',function(e){tiltTo(e.clientX/innerWidth-.5,e.clientY/innerHeight-.5);wake()});
 addEventListener('deviceorientation',function(e){if(e.gamma!=null)tiltTo(Math.max(-1,Math.min(1,e.gamma/30))/2,Math.max(-1,Math.min(1,(e.beta-40)/30))/2)});
 /* Controls hide while presenting. */
+addEventListener('touchstart',function(){wake()},{passive:true});
 var idleT;function wake(){app.classList.remove('idle');clearTimeout(idleT);idleT=setTimeout(function(){app.classList.add('idle')},2600)}
 wake();
 addEventListener('keydown',function(e){

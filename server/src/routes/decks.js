@@ -14,6 +14,7 @@ const summary = (d) => ({
   id: String(d._id),
   title: d.title,
   lookId: d.lookId,
+  logo: d.logo === 'none' ? 'none' : 'adron',
   count: (d.slides || []).filter((s) => !s.hidden).length,
   thumb: d.thumb || '',
   first: d.first || null,
@@ -38,7 +39,7 @@ const own = async (req, res) => {
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const docs = await RestyleDeck.find({ team: req.team._id }).select('title lookId thumb first shareId updatedAt slides.hidden').sort({ updatedAt: -1 }).lean();
+    const docs = await RestyleDeck.find({ team: req.team._id }).select('title lookId logo thumb first shareId updatedAt slides.hidden').sort({ updatedAt: -1 }).lean();
     res.json({ decks: docs.map(summary) });
   }),
 );
@@ -103,7 +104,7 @@ shared.get(
     const d = /^[A-Za-z0-9_-]{8,40}$/.test(id) ? await RestyleDeck.findOne({ shareId: id }).lean() : null;
     if (!d) return res.status(404).json({ error: { code: 'not_found', message: 'This link doesn’t work any more. Ask for a new one.' } });
     res.set('Cache-Control', 'public, max-age=60');
-    res.json({ deck: { title: d.title, lookId: d.lookId, transition: d.transition, slides: (d.slides || []).filter((s) => !s.hidden) } });
+    res.json({ deck: { title: d.title, lookId: d.lookId, logo: d.logo === 'none' ? 'none' : 'adron', transition: d.transition, slides: (d.slides || []).filter((s) => !s.hidden) } });
   }),
 );
 

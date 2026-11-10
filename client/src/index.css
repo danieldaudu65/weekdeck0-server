@@ -105,6 +105,58 @@ select {
   }
 }
 
+/* Present mode, pictures: wiped in from the left, zooming gently into place, then a slow drift. */
+@keyframes wd-photo {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes wd-settle {
+  from {
+    transform: scale(1.18);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes wd-drift {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.07) translate(-1.2%, -0.8%);
+  }
+}
+/* Present mode: a logo pops in */
+@keyframes wd-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06) rotate(1deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wd-moving,
+  .wd-moving * {
+    animation: none !important;
+  }
+}
+
 /* Sideways strips (look picker): a thin scrollbar, nothing on phones. */
 .wd-strip { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, currentColor 25%, transparent) transparent; }
 @media (pointer: coarse) { .wd-strip { scrollbar-width: none; } }

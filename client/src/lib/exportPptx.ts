@@ -2,6 +2,7 @@
  * Builds a real, editable PowerPoint from the same shapes as the preview.
  * Runs in the browser (pptxgenjs), loaded only when the button is tapped.
  */
+import { brandLaid, type Brand } from './brand';
 import { CANVAS_W, type DeckSlide, type Font, type Shape } from './deck';
 import { layoutSlide } from './looks';
 import type { Look } from './templates';
@@ -32,7 +33,7 @@ async function cropToBox(src: string, w: number, h: number): Promise<string> {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
-export async function buildPptx(slides: DeckSlide[], look: Look, meta: { teamName: string; title: string }) {
+export async function buildPptx(slides: DeckSlide[], look: Look, meta: { teamName: string; title: string; brand?: Brand }) {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pres = new PptxGenJS();
   pres.layout = 'LAYOUT_16x9';
@@ -41,7 +42,7 @@ export async function buildPptx(slides: DeckSlide[], look: Look, meta: { teamNam
   pres.company = 'WeekDeck';
 
   for (const [i, slide] of slides.entries()) {
-    const { bg, shapes } = layoutSlide(slide, look, { teamName: meta.teamName, page: i + 1, total: slides.length });
+    const { bg, shapes } = brandLaid(layoutSlide(slide, look, { teamName: meta.teamName, page: i + 1, total: slides.length }), slide, meta.brand ?? 'none');
     const s = pres.addSlide();
     s.background = { color: bg };
     for (const sh of shapes) await addShape(pres, s, sh);
@@ -76,7 +77,8 @@ async function addShape(pres: Pres, s: Slide, sh: Shape) {
       s.addShape(pres.ShapeType.ellipse, { ...pos, w: sh.w * IN, h: sh.h * IN, ...fillAndLine(sh) });
       return;
     case 'image': {
-      const data = await cropToBox(sh.src, sh.w, sh.h).catch(() => sh.src);
+      // A logo badge is already the right shape, and its corners are see-through (JPEG would blacken them).
+      const data = sh.anim === 'pop' ? sh.src : await cropToBox(sh.src, sh.w, sh.h).catch(() => sh.src);
       s.addImage({ data, ...pos, w: sh.w * IN, h: sh.h * IN });
       return;
     }
@@ -93,6 +95,9 @@ async function addShape(pres: Pres, s: Slide, sh: Shape) {
         align: sh.align ?? 'left',
         valign: sh.valign ?? 'top',
         margin: 0,
+        // The same line height as on screen, and PowerPoint shrinks the words if they ever outgrow the box.
+        lineSpacingMultiple: 1.18,
+        fit: 'shrink',
         isTextBox: true,
         ...(sh.spacing ? { charSpacing: Math.round(sh.spacing * PT * 10) / 10 } : {}),
       });

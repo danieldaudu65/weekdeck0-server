@@ -82,6 +82,12 @@ function cleanRestyle(raw) {
       out.original = s.slide && s.original === s.slide.image ? out.slide.image : picture(s.original, budget);
       out.originalRatio = ratioOf(s.originalRatio);
     }
+    // The uploaded slide's picture, kept aside (shown only when turned on).
+    if (s.filePicture) {
+      const shown = 'image' in out.slide && s.filePicture === (s.slide && s.slide.image);
+      out.filePicture = shown ? out.slide.image : picture(s.filePicture, budget);
+      out.filePictureRatio = ratioOf(s.filePictureRatio);
+    }
     return out;
   });
   const thumb = String(b.thumb || '');
@@ -94,6 +100,7 @@ function cleanRestyle(raw) {
     title: line(b.title, 120) || 'My deck',
     lookId: /^[a-z]+_[a-z]+$/.test(String(b.lookId || '')) ? String(b.lookId) : 'classic_classic',
     transition: TRANSITIONS.has(b.transition) ? b.transition : 'cube',
+    logo: b.logo === 'none' ? 'none' : 'adron',
     sourceName: line(b.sourceName, 160),
     slides,
     thumb,

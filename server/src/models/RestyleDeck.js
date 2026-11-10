@@ -12,6 +12,8 @@ const restyleDeckSchema = new mongoose.Schema(
     title: { type: String, default: 'My deck' },
     lookId: { type: String, default: 'classic_classic' },
     transition: { type: String, default: 'cube' },
+    /** The company logo on every slide: 'adron' (the default) or 'none'. */
+    logo: { type: String, default: 'adron' },
     sourceName: { type: String, default: '' },
     slides: { type: [mongoose.Schema.Types.Mixed], default: [] },
     /** A small picture of the first slide, for the "My decks" list. */

@@ -1,5 +1,6 @@
 import { api } from '../api';
 import type { RestyleSlide } from './read';
+import type { Brand } from '../brand';
 
 export type Transition = 'cube' | 'flip' | 'zoom' | 'slide';
 
@@ -7,6 +8,8 @@ export interface DeckSummary {
   id: string;
   title: string;
   lookId: string;
+  /** The company logo on every slide (missing on old decks: shown). */
+  logo?: Brand;
   count: number;
   thumb: string;
   /** The first shown slide, its pictures left out (draw it with `thumb`). */
@@ -24,6 +27,7 @@ export interface RestyleDeck extends DeckSummary {
 export interface DeckBody {
   title: string;
   lookId: string;
+  logo: Brand;
   transition: Transition;
   sourceName: string;
   slides: RestyleSlide[];

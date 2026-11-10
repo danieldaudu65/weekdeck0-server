@@ -1,4 +1,5 @@
 /** Edit one slide of a restyled deck: its words, table, picture, and kind. Shows the result live. */
+import { autoCells, tidyAmount, withTotals } from '../../lib/restyle/tableMath';
 import { useRef, useState, type ReactNode } from 'react';
 import { ImagePlus, Trash2, X } from 'lucide-react';
 import { Button } from '../../components/ui';
@@ -6,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { SlideCanvas } from '../../components/SlideCanvas';
 import type { DeckSlide } from '../../lib/deck';
 import { layoutSlide } from '../../lib/looks';
+import { brandLaid, type Brand } from '../../lib/brand';
 import { shrinkPicture } from '../../lib/restyle/load';
 import type { RestyleSlide } from '../../lib/restyle/read';
 
@@ -51,14 +53,14 @@ function asKind(s: DeckSlide, kind: Kind, ratio = 0): DeckSlide {
   }
 }
 
-export function SlideEditor({ item, lookId, deckTitle, onChange, onClose }: { item: RestyleSlide; lookId: string; deckTitle: string; onChange: (s: RestyleSlide) => void; onClose: () => void }) {
+export function SlideEditor({ item, lookId, logo = 'adron', deckTitle, onChange, onClose }: { item: RestyleSlide; lookId: string; logo?: Brand; deckTitle: string; onChange: (s: RestyleSlide) => void; onClose: () => void }) {
   const toast = useToast();
   const pick = useRef<HTMLInputElement>(null);
   const [pointsDraft, setPointsDraft] = useState(() => pointsText(item.slide));
   const s = item.slide;
   const set = (slide: DeckSlide) => onChange({ ...item, slide });
   const setField = (patch: Record<string, unknown>) => set({ ...s, ...patch } as DeckSlide);
-  const laid = layoutSlide(s, lookId, { teamName: deckTitle, page: 1, total: 1 });
+  const laid = brandLaid(layoutSlide(s, lookId, { teamName: deckTitle, page: 1, total: 1 }), s, logo);
   const showingOriginal = Boolean(item.original) && s.kind === 'picture' && s.image === item.original;
 
   const addPicture = async (file: File | undefined) => {
@@ -73,7 +75,14 @@ export function SlideEditor({ item, lookId, deckTitle, onChange, onClose }: { it
     }
   };
 
-  const cell = (v: string, onV: (x: string) => void, bold = false) => <input value={v} onChange={(e) => onV(e.target.value)} className={`h-9 w-full min-w-[90px] rounded-lg border border-line bg-white px-2 text-sm ${bold ? 'font-bold' : ''}`} />;
+  const cell = (v: string, onV: (x: string) => void, bold = false, opts: { auto?: boolean; amount?: boolean } = {}) =>
+    opts.auto ? (
+      <div title="Worked out for you" className={`flex h-9 w-full min-w-[90px] items-center rounded-lg bg-blue/10 px-2 text-sm text-blue ${bold ? 'font-extrabold' : 'font-bold'}`}>
+        {v || '—'}
+      </div>
+    ) : (
+      <input value={v} onChange={(e) => onV(e.target.value)} onBlur={opts.amount ? (e) => tidyAmount(e.target.value) !== e.target.value && onV(tidyAmount(e.target.value)) : undefined} className={`h-9 w-full min-w-[90px] rounded-lg border border-line bg-white px-2 text-sm ${bold ? 'font-bold' : ''}`} />
+    );
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 backdrop-blur-sm md:items-center md:p-6" role="dialog" aria-modal="true" aria-label="Edit slide" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -159,7 +168,10 @@ export function SlideEditor({ item, lookId, deckTitle, onChange, onClose }: { it
                 <div className="-mx-1 overflow-x-auto px-1">
                   <table className="w-full border-separate border-spacing-1">
                     <tbody>
-                      {[s.table.head, ...s.table.rows, ...(s.table.total.length ? [s.table.total] : [])].map((r, ri, all) => (
+                      {[s.table.head, ...s.table.rows, ...(s.table.total.length ? [s.table.total] : [])].map((r, ri, all) => {
+                        const isTotalRow = s.table.total.length > 0 && ri === all.length - 1;
+                        const auto = autoCells(s.table);
+                        return (
                         <tr key={ri}>
                           {r.map((c, ci) =>
                             <td key={ci}>
@@ -168,14 +180,16 @@ export function SlideEditor({ item, lookId, deckTitle, onChange, onClose }: { it
                                 (x) => {
                                   const rows = all.map((row, i) => (i === ri ? row.map((v, j) => (j === ci ? x : v)) : row));
                                   const hasTotal = s.table.total.length > 0;
-                                  setField({ table: { head: rows[0], rows: rows.slice(1, hasTotal ? -1 : undefined), total: hasTotal ? rows[rows.length - 1] : [] } });
+                                  setField({ table: withTotals({ head: rows[0], rows: rows.slice(1, hasTotal ? -1 : undefined), total: hasTotal ? rows[rows.length - 1] : [] }) });
                                 },
-                                ri === 0 || (s.table.total.length > 0 && ri === all.length - 1),
+                                ri === 0 || isTotalRow,
+                                { auto: ri > 0 && ci > 0 && auto(isTotalRow ? -1 : ri - 1, ci), amount: ri > 0 && ci > 0 },
                               )}
                             </td>,
                           )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -183,26 +197,34 @@ export function SlideEditor({ item, lookId, deckTitle, onChange, onClose }: { it
                   <Button size="sm" variant="soft" onClick={() => setField({ table: { ...s.table, rows: [...s.table.rows, s.table.head.map(() => '')] } })}>
                     + Row
                   </Button>
-                  <Button size="sm" variant="soft" onClick={() => setField({ table: { head: [...s.table.head, ''], rows: s.table.rows.map((r) => [...r, '']), total: s.table.total.length ? [...s.table.total, ''] : [] } })}>
+                  <Button size="sm" variant="soft" onClick={() => setField({ table: withTotals({ head: [...s.table.head, ''], rows: s.table.rows.map((r) => [...r, '']), total: s.table.total.length ? [...s.table.total, ''] : [] }) })}>
                     + Column
                   </Button>
                   {s.table.rows.length > 1 && (
-                    <Button size="sm" variant="ghost" onClick={() => setField({ table: { ...s.table, rows: s.table.rows.slice(0, -1) } })}>
+                    <Button size="sm" variant="ghost" onClick={() => setField({ table: withTotals({ ...s.table, rows: s.table.rows.slice(0, -1) }) })}>
                       − Last row
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => setField({ table: { ...s.table, total: s.table.total.length ? [] : s.table.head.map((_, i) => (i === 0 ? 'TOTAL' : '')) } })}>
+                  <Button size="sm" variant="ghost" onClick={() => setField({ table: withTotals({ ...s.table, total: s.table.total.length ? [] : s.table.head.map((_, i) => (i === 0 ? 'TOTAL' : '')) }) })}>
                     {s.table.total.length ? 'No total row' : '+ Total row'}
                   </Button>
                 </div>
+                <p className="text-xs font-semibold text-muted">
+                  <span className="rounded bg-blue/10 px-1.5 py-0.5 font-bold text-blue">Blue</span> totals add up by themselves. Type amounts like 2.1m or 500k.
+                </p>
               </div>
             )}
-            {s.kind !== 'table' && s.kind !== 'thanks' && (
+            {s.kind !== 'table' && (s.kind !== 'thanks' || item.filePicture) && (
               <div className="flex flex-wrap items-center gap-2">
                 <input ref={pick} type="file" accept="image/*" className="sr-only" onChange={(e) => void addPicture(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
                 <Button size="sm" variant="soft" icon={<ImagePlus className="size-4" aria-hidden />} onClick={() => pick.current?.click()}>
                   {imageOf(s) ? 'Change picture' : 'Add a picture'}
                 </Button>
+                {item.filePicture && imageOf(s) !== item.filePicture && (
+                  <Button size="sm" variant="ghost" onClick={() => (s.kind === 'cover' ? setField({ image: item.filePicture }) : s.kind === 'bullets' || s.kind === 'picture' ? setField({ image: item.filePicture, ratio: item.filePictureRatio ?? 0 }) : set({ ...asKind(s, 'bullets'), image: item.filePicture!, ratio: item.filePictureRatio ?? 0 } as DeckSlide))}>
+                    Use the file’s picture
+                  </Button>
+                )}
                 {imageOf(s) && s.kind !== 'picture' && (
                   <Button size="sm" variant="ghost" icon={<Trash2 className="size-4" aria-hidden />} onClick={() => setField({ image: '' })}>
                     Remove picture

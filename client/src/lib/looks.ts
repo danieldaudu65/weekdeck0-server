@@ -6,6 +6,7 @@
  *
  * Canvas: 1280 × 720. Font sizes are canvas px.
  */
+import { lineCount, textHeight, textWidth } from './measure';
 import type { DeckSlide, Font, Shape } from './deck';
 import { lookById, type Look, type Theme } from './templates';
 
@@ -74,15 +75,12 @@ const O = (x: number, y: number, d: number, fill: string | null, o: { stroke?: s
 
 /** The biggest font size (≤ max) at which `text` fits in w × h. */
 export function fit(text: string, w: number, h: number, max: number, min = 11, font: Font = 'sans'): number {
-  const widthK = font === 'display' ? 0.66 : font === 'serif' ? 0.54 : 0.55;
-  const caps = text === text.toUpperCase() && /[A-Z]/.test(text);
-  const k = widthK * (caps ? 1.32 : 1);
-  const chars = Math.max(1, text.length);
-  const longest = Math.max(1, ...text.split(/\s+/).map((x) => x.length));
-  const lines = text.split('\n').length;
-  let s = Math.sqrt((w * h) / (k * 1.25 * chars));
-  s = Math.min(s, w / (k * longest * 1.05), h / (1.2 * lines));
-  return Math.max(min, Math.min(max, Math.floor(s)));
+  // Measured with real letter widths (bold, to be safe), so the words never spill out of their box.
+  const fits = (size: number) => textHeight(text, size, w * 0.98, { font, bold: true }) <= h + 0.5;
+  for (let size = Math.floor(max); size >= min; size--) if (fits(size)) return size;
+  // Too much text even at the smallest size: smaller still, rather than cut off or spilling over.
+  for (let size = min - 1; size >= 8; size--) if (fits(size)) return size;
+  return Math.min(min, 8);
 }
 
 const initials = (name: string) =>
@@ -127,14 +125,24 @@ interface TableColours {
 function table(slide: Kind<'table'>, a: Area, c: TableColours): S[] {
   const { head, rows, total } = slide.table;
   const cols = head.length;
-  // Wide enough for full names ("OLORUNSOGO OPEOLUWA SAMUEL" on accountants' slides), never more than a third.
-  const longestName = Math.max(0, ...[...rows, total].map((r) => (r[0] ?? '').length));
-  const nameW = Math.max(Math.min(240, Math.max(150, Math.round(a.w * 0.19))), Math.min(Math.round(a.w * 0.36), longestName * 12 + 36));
-  const other = (a.w - nameW) / (cols - 1);
   const rowH = Math.max(26, Math.min(56, Math.floor(a.h / (rows.length + 2))));
-  const longest = Math.max(4, ...[...rows, total].flatMap((r) => r.slice(1).map((x) => x.length)), ...head.slice(1).map((x) => x.length));
-  const size = Math.max(11, Math.min(19, rowH * 0.38, (other - 18) / (longest * 0.6)));
-  return [{ type: 'table', x: a.x, y: a.y, colW: [nameW, ...Array(cols - 1).fill(other)], rowH, size: Math.floor(size), head, rows, total, boldEdges: true, ...c }];
+  const all = [head, ...rows, total].filter((r) => r.length);
+  // Each column as wide as its longest cell (measured, bold to be safe, plus the cell's padding).
+  const needAt = (size: number) => Array.from({ length: cols }, (_, i) => Math.max(40, ...all.map((r) => textWidth(r[i] ?? '', size, { bold: true, font: c.font }) + 24)));
+  let size = Math.floor(Math.max(11, Math.min(19, rowH * 0.38)));
+  while (size > 9 && needAt(size).reduce((x, y) => x + y, 0) > a.w) size--;
+  const need = needAt(size);
+  // The room left over: the names column first (up to a fifth of the width), then shared out.
+  const colW = [...need];
+  let spare = a.w - need.reduce((x, y) => x + y, 0);
+  if (spare > 0) {
+    const toName = Math.min(spare, Math.max(0, Math.round(a.w * 0.2) - colW[0]));
+    colW[0] += toName;
+    spare -= toName;
+    if (cols > 1) for (let i = 1; i < cols; i++) colW[i] += spare / (cols - 1);
+    else colW[0] += spare;
+  }
+  return [{ type: 'table', x: a.x, y: a.y, colW, rowH, size, head, rows, total, boldEdges: true, ...c }];
 }
 
 /* ------------------------------------------------------------------ content: activities */
@@ -248,7 +256,7 @@ function teamList(m: Members, a: Area, c: TeamColours): S[] {
     const out: S[] = [
       O(x, y, d, p.lead ? c.lead : c.circle),
       T(x, y, d, d, initials(p.name), d * 0.38, p.lead ? c.leadInk : c.circleInk, { bold: true, align: 'center' }),
-      T(x + d + 18, y + (p.lead ? 0 : d * 0.15), colW - d - 40, p.lead ? d * 0.6 : d * 0.7, p.name.toUpperCase(), Math.min(26, d * 0.46), c.ink, { bold: true, font: c.font }),
+      T(x + d + 18, y + (p.lead ? 0 : d * 0.15), colW - d - 40, p.lead ? d * 0.6 : d * 0.7, p.name.toUpperCase(), fit(p.name.toUpperCase(), colW - d - 40, p.lead ? d * 0.56 : d * 0.7, Math.min(26, d * 0.46), 9, c.font), c.ink, { bold: true, font: c.font }),
     ];
     if (p.lead) out.push(T(x + d + 18, y + d * 0.58, colW - d - 40, d * 0.42, 'TEAM LEAD', Math.min(15, d * 0.28), c.label, { bold: true, spacing: 1.5 }));
     return out;
@@ -267,13 +275,13 @@ function teamCards(m: Members, a: Area, c: TeamColours): S[] {
   return m.flatMap((p, i) => {
     const x = a.x + (i % cols) * (w + gap);
     const y = a.y + Math.floor(i / cols) * (h + gap);
-    const nameSize = fit(p.name.toUpperCase(), w - d - 52, h * 0.5, 24, 12, c.font);
+    const nameSize = fit(p.name.toUpperCase(), w - d - 52, p.lead ? h * 0.4 : h * 0.6, 24, 9, c.font);
     return [
       R(x, y, w, h, c.card ?? c.circle, c.radius ?? 18),
       O(x + 20, y + (h - d) / 2, d, p.lead ? c.lead : c.circle),
       T(x + 20, y + (h - d) / 2, d, d, initials(p.name), d * 0.36, p.lead ? c.leadInk : c.circleInk, { bold: true, align: 'center' }),
       T(x + d + 36, y + (p.lead ? h * 0.18 : 0), w - d - 52, p.lead ? h * 0.42 : h, p.name.toUpperCase(), nameSize, c.ink, { bold: true, font: c.font }),
-      ...(p.lead ? [T(x + d + 36, y + h * 0.58, w - d - 52, h * 0.24, 'TEAM LEAD', 13, c.label, { bold: true, spacing: 1.5, valign: 'top' })] : []),
+      ...(p.lead ? [T(x + d + 36, y + h * 0.62, w - d - 52, h * 0.24, 'TEAM LEAD', 13, c.label, { bold: true, spacing: 1.5, valign: 'top' })] : []),
     ];
   });
 }
@@ -1194,12 +1202,11 @@ function bulletsContent(slide: Kind<'bullets'>, a: Area, c: ReturnType<typeof in
   const sizeOf = (p: { level: number }, size: number) => (p.level ? Math.round(size * 0.84) : size);
   const linesOf = (p: { text: string; level: number }, size: number) => {
     const s = sizeOf(p, size);
-    const width = tw - indent(p) - s * 1.1;
-    return Math.max(1, Math.ceil((p.text.length * s * 0.52) / Math.max(80, width)) + (p.text.match(/\n/g)?.length ?? 0));
+    return lineCount(p.text, s, (tw - indent(p) - s * 1.05) * 0.98);
   };
   const heightAt = (size: number) => pts.reduce((h, p) => h + linesOf(p, size) * sizeOf(p, size) * 1.28 + size * 0.62, 0);
   let size = pts.length <= 3 ? 34 : 30;
-  while (size > 15 && heightAt(size) > a.h) size--;
+  while (size > 11 && heightAt(size) > a.h) size--;
   let y = a.y + Math.max(0, Math.min(a.h - heightAt(size), a.h * 0.08));
   for (const p of pts) {
     const s = sizeOf(p, size);

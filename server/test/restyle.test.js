@@ -29,7 +29,14 @@ test('a restyled deck is tidied: kinds, text, pictures, ids', () => {
   assert.equal(d.slides[3].slide.kind, 'bullets');
   assert.equal(d.slides[4].slide.ratio, 0);
   assert.equal(d.slides[4].original, jpeg);
+  const kept = cleanRestyle({ slides: [{ slide: { kind: 'bullets', title: 'x', points: [] }, filePicture: jpeg, filePictureRatio: 1.5 }] });
+  assert.equal(kept.slides[0].filePicture, jpeg);
+  assert.equal(kept.slides[0].filePictureRatio, 1.5);
+  assert.throws(() => cleanRestyle({ slides: [{ slide: { kind: 'bullets' }, filePicture: 'nope' }] }));
   assert.equal(cleanRestyle({ lookId: '<x>', transition: 'spin' }).lookId, 'classic_classic');
+  assert.equal(cleanRestyle({}).logo, 'adron');
+  assert.equal(cleanRestyle({ logo: 'none' }).logo, 'none');
+  assert.equal(cleanRestyle({ logo: '<script>' }).logo, 'adron');
   assert.equal(cleanRestyle({ transition: 'spin' }).transition, 'cube');
 });
 

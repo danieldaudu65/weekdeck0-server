@@ -3,6 +3,7 @@
  * edit slides, then present in 3D, download (3D .html, PowerPoint, PDF) or share
  * a link. Every change saves by itself.
  */
+import { ADRON_LOGO } from '../../lib/adronLogo';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
@@ -13,12 +14,13 @@ import { SlideCanvas } from '../../components/SlideCanvas';
 import { LookPicker } from '../../components/LookPicker';
 import { ApiError } from '../../lib/api';
 import type { DeckSlide } from '../../lib/deck';
-import { layoutSlide } from '../../lib/looks';
 import { lookById } from '../../lib/templates';
 import { decksApi, type RestyleDeck, type Transition } from '../../lib/restyle/api';
 import { deckBody } from '../../lib/restyle/body';
-import { download3d, downloadPptx3d, html3d } from '../../lib/restyle/exports';
+import { download3d, downloadPptx3d, html3d, laySlide } from '../../lib/restyle/exports';
 import { slideId, type RestyleSlide } from '../../lib/restyle/read';
+import { usesFilePictures, withFilePictures } from '../../lib/restyle/load';
+import { withTotals } from '../../lib/restyle/tableMath';
 import { SlideEditor } from './SlideEditor';
 
 const TRANSITIONS: { id: Transition; label: string }[] = [
@@ -50,8 +52,10 @@ export function DeckEditorPage() {
     decksApi
       .get(id)
       .then((r) => {
-        setDeck(r.deck);
-        latest.current = r.deck;
+        // Decks saved before tables added themselves up get their totals now.
+        const deck = { ...r.deck, slides: r.deck.slides.map((x) => (x.slide.kind === 'table' ? { ...x, slide: { ...x.slide, table: withTotals(x.slide.table) } } : x)) };
+        setDeck(deck);
+        latest.current = deck;
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'This deck couldn’t be opened.'));
   }, [id]);
@@ -240,6 +244,20 @@ export function DeckEditorPage() {
       {/* Look + transition */}
       <section className="space-y-4 rounded-3xl bg-white p-4 shadow-sm md:p-5">
         <LookPicker look={look} cover={coverForPicker} onChange={(lookId) => change((d) => ({ ...d, lookId }))} />
+        {deck.slides.some((x) => x.filePicture) && (
+          <label className="flex w-fit cursor-pointer items-center gap-3 rounded-2xl bg-paper px-4 py-2.5">
+            <input type="checkbox" className="peer sr-only" checked={usesFilePictures(deck.slides)} onChange={(e) => setSlides((all) => withFilePictures(all, e.target.checked))} />
+            <span aria-hidden className="relative h-6 w-11 rounded-full bg-ink/20 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-blue peer-checked:after:translate-x-5" />
+            <span className="text-sm font-extrabold">Pictures from the file</span>
+            <span className="text-xs font-semibold text-muted">{deck.slides.filter((x) => x.filePicture).length} slides</span>
+          </label>
+        )}
+        <label className="flex w-fit cursor-pointer items-center gap-3 rounded-2xl bg-paper px-4 py-2.5">
+          <input type="checkbox" className="peer sr-only" checked={(deck.logo ?? 'adron') === 'adron'} onChange={(e) => change((d) => ({ ...d, logo: e.target.checked ? 'adron' : 'none' }))} />
+          <span aria-hidden className="relative h-6 w-11 rounded-full bg-ink/20 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-blue peer-checked:after:translate-x-5" />
+          <img src={ADRON_LOGO} alt="" className="h-6 rounded" />
+          <span className="text-sm font-extrabold">Adron logo on every slide</span>
+        </label>
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-1 text-sm font-extrabold">3D motion</span>
           {TRANSITIONS.map((t) => (
@@ -278,7 +296,7 @@ export function DeckEditorPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence initial={false}>
             {deck.slides.map((s, i) => {
-              const laid = layoutSlide(s.slide, deck.lookId, { teamName: deck.title, page: Math.max(1, pageOf(s)), total: shown.length });
+              const laid = laySlide(s.slide, deck, Math.max(1, pageOf(s)), shown.length);
               return (
                 <motion.div key={s.id} layout initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className={`min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-line ${s.hidden ? 'opacity-50' : ''}`}>
                   <button type="button" className="block w-full text-left" onClick={() => setEditing(s.id)} aria-label={`Edit slide ${i + 1}`}>
@@ -321,6 +339,7 @@ export function DeckEditorPage() {
         <SlideEditor
           item={editingSlide}
           lookId={deck.lookId}
+          logo={deck.logo ?? 'adron'}
           deckTitle={deck.title}
           onChange={(next) => setSlides((all) => all.map((x) => (x.id === next.id ? next : x)))}
           onClose={() => setEditing(null)}

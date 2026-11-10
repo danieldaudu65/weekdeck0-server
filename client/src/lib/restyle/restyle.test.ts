@@ -71,3 +71,105 @@ describe('restyle: reading anyone’s PowerPoint', () => {
     }
   });
 });
+
+describe('restyle: pictures from the file', async () => {
+  const { setAside, withFilePictures, usesFilePictures } = await import('./load');
+  const pic = 'data:image/jpeg;base64,AAAA';
+  const bullets = { id: 'a', hidden: false, slide: { kind: 'bullets' as const, title: 'Santa at Jendol', subtitle: '', points: [{ text: 'Free gifts', level: 0 }], image: pic, ratio: 0.5 } };
+  it('can be taken out and put back', () => {
+    const out = [setAside(bullets, false), setAside({ id: 'b', hidden: false, slide: { kind: 'picture', title: '', subtitle: '', image: pic, ratio: 1 } }, false), setAside({ id: 'c', hidden: false, slide: { kind: 'picture', title: '', subtitle: '', image: pic, ratio: 1 } }, true)];
+    expect(out[0].slide).toMatchObject({ kind: 'bullets', image: '' });
+    expect(out[0].filePicture).toBe(pic);
+    expect(out[1].hidden).toBe(true); // a slide that's only a picture, while pictures are off
+    expect(out[2].slide).toEqual({ kind: 'thanks', title: 'Thank you', sub: '' }); // the last one: a "Thank you" picture
+    expect(usesFilePictures(out)).toBe(false);
+    const on = withFilePictures(out, true);
+    expect(on[0].slide).toMatchObject({ image: pic, ratio: 0.5 });
+    expect(on[1]).toMatchObject({ hidden: false, slide: { kind: 'picture', image: pic } });
+    expect(on[2].slide).toMatchObject({ kind: 'picture', image: pic });
+    expect(usesFilePictures(on)).toBe(true);
+    expect(withFilePictures(on, false)).toEqual(out);
+  });
+});
+
+describe('restyle: the photo inside a screenshot', async () => {
+  const { mainArea } = await import('./trim');
+  const W = 200, H = 160;
+  // A noisy, colourful photo-like fill (seeded so the test never changes).
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const make = (paint: (x: number, y: number) => [number, number, number]) => {
+    const d = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const [r, g, b] = paint(x, y);
+      d.set([r, g, b, 255], (y * W + x) * 4);
+    }
+    return d;
+  };
+  const photo = (x: number, y: number): [number, number, number] => [60 + ((x * 3 + rnd() * 90) | 0) % 190, 90 + ((y * 2 + rnd() * 80) | 0) % 150, 40 + ((rnd() * 120) | 0)];
+  it('cuts a Google-style screenshot down to its photo', () => {
+    const d = make((x, y) => {
+      if (y < 12) return [32, 33, 36]; // phone status bar
+      if (y < 26) return x > 20 && x < 180 && y > 15 && y < 23 ? [241, 243, 244] : [255, 255, 255]; // search box
+      if (y >= 40 && y < 130 && x >= 30 && x < 170) return photo(x, y); // the photo
+      if (y >= 136 && y < 140 && x > 30 && x < 120 && x % 3 === 0) return [60, 64, 67]; // a caption
+      return [255, 255, 255];
+    });
+    const a = mainArea(d, W, H)!;
+    expect(a).not.toBeNull();
+    expect(Math.abs(a.x * W - 30)).toBeLessThan(4);
+    expect(Math.abs(a.y * H - 40)).toBeLessThan(4);
+    expect(Math.abs(a.w * W - 140)).toBeLessThan(5);
+    expect(Math.abs(a.h * H - 90)).toBeLessThan(5);
+  });
+  it('leaves a real photo alone', () => {
+    expect(mainArea(make(photo), W, H)).toBeNull();
+  });
+  it('leaves a photo with a pale sky alone', () => {
+    expect(mainArea(make((x, y) => (y < 50 ? [225 + y / 5 + rnd() * 8, 232 + rnd() * 8, 244 + rnd() * 8] : photo(x, y))), W, H)).toBeNull();
+  });
+  it('trims a plain white frame', () => {
+    const a = mainArea(make((x, y) => (x >= 15 && x < 185 && y >= 15 && y < 145 ? photo(x, y) : [255, 255, 255])), W, H)!;
+    expect(Math.abs(a.x * W - 15)).toBeLessThan(3);
+    expect(Math.abs(a.w * W - 170)).toBeLessThan(4);
+  });
+});
+
+describe('restyle: tables add themselves up', async () => {
+  const { readAmount, tidyAmount, withTotals, autoCells } = await import('./tableMath');
+  it('reads amounts the way managers type them', () => {
+    expect(readAmount('2.1m')).toBe(2_100_000);
+    expect(readAmount('500k')).toBe(500_000);
+    expect(readAmount('₦3,436,953.25')).toBe(3436953.25);
+    expect(readAmount('DDSM KENNETH')).toBeNull();
+    expect(tidyAmount('2.1m')).toBe('2,100,000');
+    expect(tidyAmount('1300000')).toBe('1,300,000');
+    expect(tidyAmount('Oct')).toBe('Oct');
+  });
+  it('fills the TOTAL column and TOTAL row (the managers’ inflow slide)', () => {
+    const t = withTotals({
+      head: ['NAMES', 'INFLOW', 'IINFRASTRUCTURE', 'TOTAL', 'NEW CLIENTS'],
+      rows: [
+        ['DDSM KENNETH', '3,436,953.25', '', '', '1'],
+        ['TCRO AKINLEYE', '3,100,000.00', '1,300,000.00', '', ''],
+        ['DCRO ADEKUNLE TEAM TOTAL', '2.1m', '', '', '2'],
+        ['RRO SAMUEL TEAM TOTAL', '', '', '', ''],
+      ],
+      total: ['TOTAL', '', '', '', ''],
+    });
+    expect(t.rows.map((r) => r[3])).toEqual(['3,436,953.25', '4,400,000.00', '2,100,000', '']);
+    expect(t.total).toEqual(['TOTAL', '8,636,953.25', '1,300,000.00', '9,936,953.25', '3']);
+    const auto = autoCells(t);
+    expect(auto(0, 3)).toBe(true);
+    expect(auto(0, 1)).toBe(false);
+    expect(auto(-1, 4)).toBe(true);
+  });
+  it('adds the months into TOTAL', () => {
+    const t = withTotals({ head: ['NAME', 'JULY', 'AUG', 'SEPT', 'OCT', 'TOTAL'], rows: [['TCRO AKINLEYE SIMEON', '5,200,000', '3,038,000', '4,426,000', '2.5m', '12,664,000']], total: [] });
+    expect(t.rows[0][5]).toBe('15,164,000');
+  });
+  it('leaves tables without a total alone', () => {
+    const t = { head: ['STAFF', 'STRENGHT'], rows: [['BE', '18']], total: [] };
+    expect(withTotals(t)).toBe(t);
+  });
+});

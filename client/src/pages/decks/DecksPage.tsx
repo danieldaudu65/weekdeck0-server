@@ -11,6 +11,7 @@ import { useToast } from '../../components/Toast';
 import { SlideCanvas } from '../../components/SlideCanvas';
 import { ApiError } from '../../lib/api';
 import { layoutSlide } from '../../lib/looks';
+import { brandLaid } from '../../lib/brand';
 import { decksApi, type DeckSummary } from '../../lib/restyle/api';
 import { ACCEPT_DECK, RestyleError, type RestyleSlide } from '../../lib/restyle/read';
 import { loadDeckFile } from '../../lib/restyle/load';
@@ -164,6 +165,6 @@ function DeckThumb({ deck }: { deck: DeckSummary }) {
   if (!deck.first) return <div className="aspect-video bg-paper" />;
   const s = deck.first;
   const slide = 'image' in s ? { ...s, image: deck.thumb } : s;
-  const laid = layoutSlide(slide, deck.lookId, { teamName: deck.title, page: 1, total: deck.count });
+  const laid = brandLaid(layoutSlide(slide, deck.lookId, { teamName: deck.title, page: 1, total: deck.count }), slide, deck.logo ?? 'adron');
   return <SlideCanvas bg={laid.bg} shapes={laid.shapes} label={deck.title} />;
 }

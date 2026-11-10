@@ -196,7 +196,8 @@ export type Shape =
       italic?: boolean;
       anim?: Anim;
     }
-  | { type: 'image'; x: number; y: number; w: number; h: number; src: string }
+  /** anim: pictures reveal and drift slowly ('photo', the default); a logo pops in ('pop', no drift). */
+  | { type: 'image'; x: number; y: number; w: number; h: number; src: string; anim?: 'photo' | 'pop'; radius?: number }
   | {
       type: 'table';
       x: number;

@@ -53,8 +53,17 @@ function ShapeView({ s, animate = false, index = 0 }: { s: Shape; animate?: bool
       return <div style={{ ...box, width: s.w, height: s.h, background: hex(s.fill), borderRadius: s.radius ?? 0, ...stroke(s) }} />;
     case 'ellipse':
       return <div style={{ ...box, width: s.w, height: s.h, background: hex(s.fill), borderRadius: '50%', ...stroke(s) }} />;
-    case 'image':
-      return <img src={s.src} alt="" style={{ ...box, width: s.w, height: s.h, objectFit: 'cover' }} />;
+    case 'image': {
+      const size: CSSProperties = { width: s.w, height: s.h, borderRadius: s.radius ?? 0 };
+      if (!animate) return <img src={s.src} alt="" style={{ ...box, ...size, objectFit: 'cover' }} />;
+      const delay = Math.min(1400, index * 32);
+      if (s.anim === 'pop') return <img src={s.src} alt="" className="wd-moving" style={{ position: 'absolute', left: s.x, top: s.y, ...size, objectFit: 'cover', animation: `wd-pop 700ms cubic-bezier(.2,.8,.2,1) ${delay + 500}ms both` }} />;
+      return (
+        <div className="wd-moving" style={{ position: 'absolute', left: s.x, top: s.y, ...size, overflow: 'hidden', animation: `wd-photo 1100ms cubic-bezier(.65,0,.35,1) ${delay}ms both` }}>
+          <img src={s.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', animation: `wd-settle 1600ms cubic-bezier(.2,.8,.2,1) ${delay}ms both, wd-drift 16s ease-in-out ${delay + 1600}ms infinite alternate` }} />
+        </div>
+      );
+    }
     case 'text':
       return (
         <div

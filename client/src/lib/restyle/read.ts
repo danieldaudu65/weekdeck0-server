@@ -22,6 +22,12 @@ export interface RestyleSlide {
   /** The page as it was (PDF pages with pictures or charts), to show instead. */
   original?: string;
   originalRatio?: number;
+  /**
+   * The picture the uploaded slide had, placed into the new design. Kept here so
+   * "Pictures from the file" can take it out and put it back.
+   */
+  filePicture?: string;
+  filePictureRatio?: number;
 }
 
 export interface ReadDeck {
@@ -199,7 +205,12 @@ export async function readPptxDeck(data: ArrayBuffer | Uint8Array, fileName: str
       if (!target || !MIME[ext]) return;
       const e = /<a:ext\s[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(block);
       const area = e ? (Number(e[1]) * Number(e[2])) / slideArea : 0.2;
-      pics.push({ key: `media:${target}`, area });
+      // A crop made in PowerPoint (a:srcRect, in 1/1000 of a percent from each side).
+      const sr = /<a:srcRect\b([^>]*)\/?>/.exec(block)?.[1] ?? '';
+      const side = (k: string) => Math.max(0, Math.min(90_000, Number(new RegExp(`\\s${k}="(-?\\d+)"`).exec(sr)?.[1] ?? 0))) / 100_000;
+      const crop = [side('l'), side('t'), side('r'), side('b')];
+      const cut = crop.some((c) => c > 0) && crop[0] + crop[2] < 0.95 && crop[1] + crop[3] < 0.95;
+      pics.push({ key: `media:${target}${cut ? `#crop=${crop.map((c) => c.toFixed(4)).join(',')}` : ''}`, area });
     };
     let rest = xml;
     // Tables, charts and SmartArt (graphic frames) first, then taken out.
@@ -264,7 +275,7 @@ export async function readPptxDeck(data: ArrayBuffer | Uint8Array, fileName: str
   for (const [i, raw] of raws.entries()) {
     const pic = raw.pics.filter((p) => p.area >= 0.04).sort((a, b) => b.area - a.area)[0];
     if (pic && !media.has(pic.key)) {
-      const path = pic.key.slice(6);
+      const path = pic.key.slice(6).split('#')[0];
       const bytes = await zip.file(path)?.async('uint8array');
       if (bytes) media.set(pic.key, { bytes, type: MIME[path.split('.').pop()!.toLowerCase()] });
     }
@@ -284,10 +295,18 @@ function fromPptSlide(raw: RawPptSlide, index: number, count: number, image: str
     titleBox = [...short].sort((a, b) => b.size - a.size)[0] ?? undefined;
     if (titleBox && short.length > 1 && titleBox.size && titleBox.size === short.find((b) => b !== titleBox)?.size) titleBox = short[0];
   }
-  const title = titleBox ? titleBox.paras.map((p) => p.text).join(' ') : '';
-  const others = boxes.filter((b) => b !== titleBox);
+  let title = titleBox ? titleBox.paras.map((p) => p.text).join(' ') : '';
+  let others = boxes.filter((b) => b !== titleBox);
+  // "Presented by FAGBA REGION" is who's presenting, not the title: the longest other text is.
+  if (/^presented\s+by\b/i.test(title) && others.length) {
+    const real = [...others].sort((a, b) => b.paras.map((p) => p.text).join(' ').length - a.paras.map((p) => p.text).join(' ').length)[0];
+    const presenter = { ph: 'body', paras: [{ text: title.replace(/\s+/g, ' '), level: 0 }], size: 0 };
+    title = real.paras.map((p) => p.text).join(' ');
+    others = [...others.filter((b) => b !== real), presenter];
+  }
   const subBox = others.find((b) => b.ph === 'subTitle');
-  const points = others.filter((b) => b !== subBox).flatMap((b) => b.paras);
+  // One or two stray letters (bits of a picture caption) aren't points.
+  const points = others.filter((b) => b !== subBox).flatMap((b) => b.paras).filter((p) => p.text.length > 2 || /\d/.test(p.text));
   const subtitle = subBox ? subBox.paras.map((p) => p.text).join(' ') : '';
   const table = raw.tables[0];
 
@@ -301,6 +320,8 @@ function fromPptSlide(raw: RawPptSlide, index: number, count: number, image: str
       if (lines.length && /(\b(of|for|the|and|to|in|on|at|by|&)|[,:\-–])$/i.test(lines[lines.length - 1])) lines[lines.length - 1] += ` ${l}`;
       else lines.push(l);
     }
+    // A title-slide layout later on with sentences under the title is really a slide of points.
+    if (index > 0 && lines.slice(1).some((l) => l.length > 60)) return { kind: 'bullets', title, subtitle: lines[0] ?? '', points: lines.slice(1).map((text) => ({ text, level: 0 })), image, ratio: 0 };
     return { kind: 'cover', title: title || 'Presentation', week: lines[0] ?? '', weekNo: 0, range: '', team: '', name: lines[1] ?? '', role: lines[2] ?? '', image, kicker: '', badge: '' };
   }
   if (/^(thank|thanks|questions|q\s*&\s*a|the end)\b/i.test(title) && !table && points.length <= 3 && index >= count - 3) {

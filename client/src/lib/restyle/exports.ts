@@ -9,21 +9,27 @@ import type { DeckSlide } from '../deck';
 import { layoutSlide } from '../looks';
 import { lookById } from '../templates';
 import { build3dHtml } from '../export3d';
+import { brandLaid, type Brand } from '../brand';
 import type { Transition } from './api';
 import type { RestyleSlide } from './read';
 
 export interface Exportable {
   title: string;
   lookId: string;
+  logo?: Brand;
   transition: Transition;
   slides: RestyleSlide[];
 }
 
 export const shownSlides = (d: Pick<Exportable, 'slides'>): DeckSlide[] => d.slides.filter((s) => !s.hidden).map((s) => s.slide);
 
+/** One slide of a restyled deck in its look, with the company logo. */
+export const laySlide = (s: DeckSlide, d: Pick<Exportable, 'lookId' | 'logo' | 'title'>, page: number, total: number) =>
+  brandLaid(layoutSlide(s, d.lookId, { teamName: d.title, page, total }), s, d.logo ?? 'adron');
+
 export function laidSlides(d: Exportable) {
   const slides = shownSlides(d);
-  return slides.map((s, i) => layoutSlide(s, d.lookId, { teamName: d.title, page: i + 1, total: slides.length }));
+  return slides.map((s, i) => laySlide(s, d, i + 1, slides.length));
 }
 
 export const fileBase = (title: string) => title.replace(/[^\w\s-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'deck';
@@ -72,7 +78,7 @@ export async function addTransitions(pptx: ArrayBuffer | Uint8Array, transition:
 
 export async function downloadPptx3d(d: Exportable) {
   const { buildPptx } = await import('../exportPptx');
-  const pres = await buildPptx(shownSlides(d), lookById(d.lookId), { teamName: d.title, title: d.title });
+  const pres = await buildPptx(shownSlides(d), lookById(d.lookId), { teamName: d.title, title: d.title, brand: d.logo ?? 'adron' });
   const raw = (await pres.write({ outputType: 'arraybuffer' })) as ArrayBuffer;
   const out = await addTransitions(raw, d.transition);
   save(new Blob([out as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), `${fileBase(d.title)}.pptx`);
