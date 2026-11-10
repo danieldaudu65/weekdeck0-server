@@ -13,6 +13,9 @@ async function main() {
   mongoose.set('strictQuery', true);
   await mongoose.connect(env.mongoUri, { serverSelectionTimeoutMS: 10_000 });
   console.log('[weekdeck] MongoDB connected');
+  await require('./models/RestyleDeck')
+    .fixShareIndex()
+    .catch((err) => console.error('[weekdeck] could not tidy the deck share links:', err.message));
   const server = createApp().listen(env.port, () => console.log(`[weekdeck] API listening on http://localhost:${env.port}`));
 
   const shutdown = async () => {

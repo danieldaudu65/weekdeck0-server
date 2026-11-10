@@ -89,9 +89,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const d = await own(req, res);
     if (!d) return;
-    d.shareId = req.body && req.body.on === false ? null : d.shareId || crypto.randomBytes(9).toString('base64url');
+    d.shareId = req.body && req.body.on === false ? undefined : d.shareId || crypto.randomBytes(9).toString('base64url');
     await d.save();
-    res.json({ shareId: d.shareId });
+    res.json({ shareId: d.shareId || null });
   }),
 );
 

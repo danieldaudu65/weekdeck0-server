@@ -19,9 +19,23 @@ const restyleDeckSchema = new mongoose.Schema(
     /** A small picture of the first slide, for the "My decks" list. */
     thumb: { type: String, default: '' },
     first: { type: mongoose.Schema.Types.Mixed, default: null },
-    shareId: { type: String, default: null, index: { unique: true, sparse: true } },
+    // Left out (not null) when the deck isn't shared: only real links must be unique.
+    shareId: { type: String },
   },
   { timestamps: true, minimize: false },
 );
+restyleDeckSchema.index({ shareId: 1 }, { unique: true, partialFilterExpression: { shareId: { $type: 'string' } } });
+
+/**
+ * Older decks were saved with shareId: null, and the old index allowed only one
+ * of those, so a second unshared deck couldn't be saved. Run once at start-up.
+ */
+restyleDeckSchema.statics.fixShareIndex = async function fixShareIndex() {
+  const indexes = await this.collection.indexes().catch(() => []);
+  const old = indexes.find((i) => i.key && i.key.shareId === 1 && !i.partialFilterExpression);
+  if (old) await this.collection.dropIndex(old.name).catch(() => undefined);
+  await this.updateMany({ shareId: null }, { $unset: { shareId: 1 } });
+  await this.syncIndexes();
+};
 
 module.exports = mongoose.model('RestyleDeck', restyleDeckSchema);

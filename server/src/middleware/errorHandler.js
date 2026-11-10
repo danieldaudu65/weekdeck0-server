@@ -11,7 +11,13 @@ function errorHandler(err, req, res, _next) {
   }
   if (err && err.code === 11000) {
     const key = Object.keys((err && err.keyPattern) || {}).join(',');
-    const message = /^key$|accountant,key/.test(key) ? 'Two marketers can’t have the same name. Merge them instead.' : /emailKey/.test(key) ? 'That email already has an account.' : 'That team name is already taken.';
+    const message = /^key$|accountant,key/.test(key)
+      ? 'Two marketers can’t have the same name. Merge them instead.'
+      : /emailKey/.test(key)
+        ? 'That email already has an account.'
+        : /name/i.test(key)
+          ? 'That team name is already taken.'
+          : 'That couldn’t be saved because it clashes with something already saved. Please try again.';
     return res.status(409).json({ error: { code: 'conflict', message } });
   }
   const status = err && err.expose && err.status ? err.status : 500;
